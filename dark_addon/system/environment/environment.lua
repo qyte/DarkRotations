@@ -14,6 +14,19 @@ local function UnitHealth(unit)
   -- if the unit is on cooldown then its health hasn't been updated yet so..
   -- lowest shouldn't be selecting it. and. the health checking in a CR
   -- shouldn't see the stale health value. so report MaxHealth instead.
+  if not dark_addon.UnitHealthActual[unit] then
+    dark_addon.UnitHealthActual[unit].hp = _G.UnitHealth(unit)
+    dark_addon.UnitHealthActual[unit].lastupdate = GetTime()
+    return _G.UnitHealth(unit)
+  end
+  if GetTime() - dark_addon.UnitHealthActual[unit].lastupdate > 1 then
+    dark_addon.UnitHealthActual[unit].hp = _G.UnitHealth(unit)
+    dark_addon.UnitHealthActual[unit].lastupdate = GetTime()
+    return _G.UnitHealth(unit)
+  end
+  return dark_addon.UnitHealthActual[unit].hp
+end
+--[[
   if dark_addon.healthCooldown[unit] ~= nil then
     if dark_addon.healthCooldown[unit] > GetTime() then
       dark_addon.console.debug(1, 'engine', 'engine', string.format('unit %s (health/max %s/%s) is on cooldown', UnitName(unit), _G.UnitHealth(unit), UnitHealthMax(unit)))
@@ -21,7 +34,7 @@ local function UnitHealth(unit)
     end
   end
   return _G.UnitHealth(unit)
-end
+end]]
 dark_addon.environment.UnitHealth = UnitHealth
 
 local GetSpellName = function(spellid)

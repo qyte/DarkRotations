@@ -80,7 +80,7 @@ function dark_addon.rotation.tick(ticker)
         return
       end
     end
-
+--[[
     local iscasting, _ = CastingInfo("player")
     local hcd = dark_addon.settings.fetch('_engine_healcd.spin', 0.8)
     if dark_addon.savedHealTarget ~= nil and not iscasting then
@@ -95,7 +95,7 @@ function dark_addon.rotation.tick(ticker)
         dark_addon.healthCooldown[unit] = nil
       end
     end
-
+]]
     if UnitAffectingCombat('player') then
       dark_addon.rotation.active_rotation.combat()
     else
