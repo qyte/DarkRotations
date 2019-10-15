@@ -2,6 +2,7 @@ local addon, dark_addon = ...
 
 local health = { }
 local UnitHealth = dark_addon.environment.UnitHealth
+local UnitGetIncomingHeals = dark_addon.environment.UnitGetIncomingHeals
 
 function health:percent()
   return UnitHealth(self.unitID) / UnitHealthMax(self.unitID) * 100

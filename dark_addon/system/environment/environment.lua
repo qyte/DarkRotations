@@ -14,17 +14,16 @@ local function UnitHealth(unit)
   -- if the unit is on cooldown then its health hasn't been updated yet so..
   -- lowest shouldn't be selecting it. and. the health checking in a CR
   -- shouldn't see the stale health value. so report MaxHealth instead.
-  if not dark_addon.UnitHealthActual[unit] then
+  local guid = UnitGUID(unit)
+  if not dark_addon.UnitHealthActual[guid] then
+    return _G.UnitHealth(unit)
+  end
+  --[[if GetTime() - dark_addon.UnitHealthActual[guid].lastupdate > 1 then
     dark_addon.UnitHealthActual[unit].hp = _G.UnitHealth(unit)
     dark_addon.UnitHealthActual[unit].lastupdate = GetTime()
     return _G.UnitHealth(unit)
-  end
-  if GetTime() - dark_addon.UnitHealthActual[unit].lastupdate > 1 then
-    dark_addon.UnitHealthActual[unit].hp = _G.UnitHealth(unit)
-    dark_addon.UnitHealthActual[unit].lastupdate = GetTime()
-    return _G.UnitHealth(unit)
-  end
-  return dark_addon.UnitHealthActual[unit].hp
+  end]]
+  return dark_addon.UnitHealthActual[unit].actual
 end
 --[[
   if dark_addon.healthCooldown[unit] ~= nil then
@@ -36,6 +35,14 @@ end
   return _G.UnitHealth(unit)
 end]]
 dark_addon.environment.UnitHealth = UnitHealth
+
+local function UnitGetIncomingHeals(unit)
+  local guid = UnitGUID(unit)
+  if not dark_addon.UnitHealthActual[guid] then return 0 end
+  return dark_addon.UnitHealthActual[guid].incoming
+end
+
+dark_addon.environment.UnitGetIncomingHeals = UnitGetIncomingHeals
 
 local GetSpellName = function(spellid)
   local rank = GetSpellSubtext(spellid)

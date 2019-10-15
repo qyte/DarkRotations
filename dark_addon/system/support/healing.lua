@@ -1,3 +1,4 @@
+local addon, dark_addon = ...
 
 local HealingSpells = {
     --Druid
@@ -32,15 +33,71 @@ local HealingSpells = {
     [25292] = "1680"--rank9
 }
 
-local spellTargetTracker = {}
+local healths = {}
+function healths:actual()
+    if GetTime() - self.lastupdate > 5 then
+        self:update()
+    end
+    return self.hp + self.playerInc
+end
+function healths:update()
+    self.hp = UnitHealth(self.unitID)
+    self.lastupdate = GetTime()
+end
+function healths:decreaseIncoming(value)
+    self.incoming = self.incoming - value
+    self.lastupdate = GetTime()
+end
+function healths:decreasePlayerIncoming(value)
+    self.playerInc = self.playerInc - value
+    self.lastupdate = GetTime()
+end
+function healths:increaceIncoming(value)
+    self.incoming = self.incoming + value
+    self.lastupdate = GetTime()
+end
+function healths:increacePlayerIncoming(value)
+    self.playerInc = self.playerInc + value
+    self.lastupdate = GetTime()
+end
+
 dark_addon.UnitHealthActual = {}
+function dark_addon.UnitHealthActual.CreateNew(unit)
+  return setmetatable({
+    unitID = unit,
+    unitGUID = UnitGUID(unit),
+    hp = UnitHealth(unit),
+    playerInc = 0,
+    incoming = 0,
+    lastupdate = GetTime()
+  }, {
+    __index = function(t, k)
+      return healths[k](t)
+    end
+  })
+end
+
+local spellTargetTracker = {}
 
 dark_addon.event.register("UNIT_HEALTH", function(unit)
-    dark_addon.UnitHealthActual[unit] = UnitHealth(unit)
+    local guid = UnitGUID(unit)
+	if not dark_addon.UnitHealthActual[guid] then
+		dark_addon.UnitHealthActual[guid] = dark_addon.UnitHealthActual.CreateNew(unit)
+    end
+    dark_addon.UnitHealthActual[guid].unitID = unit
+    dark_addon.UnitHealthActual[guid].update()
 end)
 
-local function failedSpellCast(unit, castGUID, spellID)
+local function failedSpellCast(caster, castGUID, spellID)
+    if not HealingSpells[spellID] then return end
+    if not spellTargetTracker[castGUID] then return end
+    local guid = spellTargetTracker[castGUID].guid
     spellTargetTracker[castGUID] = nil
+    if not dark_addon.UnitHealthActual[guid] then return end
+    dark_addon.UnitHealthActual[guid].decreaseIncoming(HealingSpells[spellID])
+    if UnitIsUnit(caster,'player') then
+        dark_addon.UnitHealthActual[guid].decreasePlayerIncoming(HealingSpells[spellID])
+    end
 end
 
 dark_addon.event.register("UNIT_SPELLCAST_STOP", failedSpellCast)
@@ -48,22 +105,36 @@ dark_addon.event.register("UNIT_SPELLCAST_INTERRUPTED", failedSpellCast)
 dark_addon.event.register("UNIT_SPELLCAST_FAILED_QUIET", failedSpellCast)
 dark_addon.event.register("UNIT_SPELLCAST_FAILED", failedSpellCast)
 
-dark_addon.event.register("UNIT_SPELLCAST_SENT", function(unit, target, castGUID, spellID)
-    if not healingspells[spellID] then return end
+dark_addon.event.register("UNIT_SPELLCAST_SENT", function(caster, target, castGUID, spellID)
+    if not HealingSpells[spellID] then return end
+    spellTargetTracker[castGUID] = {}
     spellTargetTracker[castGUID].target = target
-    spellTargetTracker[castGUID].time = GetTime()
+    spellTargetTracker[castGUID].guid = UnitGUID(target)
+    local guid = spellTargetTracker[castGUID].guid
+    if not dark_addon.UnitHealthActual[guid] then
+        dark_addon.UnitHealthActual[guid] = dark_addon.UnitHealthActual.CreateNew(target)
+    end
+    dark_addon.UnitHealthActual[guid].unitID = target
+    dark_addon.UnitHealthActual[guid].increaceIncoming(HealingSpells[spellID])
+    --dark_addon.UnitHealthActual[guid].update()
+    if UnitIsUnit(caster,'player') then
+        dark_addon.UnitHealthActual[guid].increacePlayerIncoming(HealingSpells[spellID])
+    end
 end)
 
-dark_addon.event.register("UNIT_SPELLCAST_SUCCEEDED", function(unit, castGUID, spellID)
+dark_addon.event.register("UNIT_SPELLCAST_SUCCEEDED", function(caster, castGUID, spellID)
+    if not HealingSpells[spellID] then return end
+    local guid = spellTargetTracker[castGUID].guid
     local target = spellTargetTracker[castGUID].target
-    if dark_addon.UnitHealthActual[target] == nil then
-        dark_addon.UnitHealthActual[target].hp = _G.UnitHealth(target)
-        --dark_addon.UnitHealthActual[target].lastupdate = GetTime()
+    if not dark_addon.UnitHealthActual[guid] then
+        dark_addon.UnitHealthActual[guid] = dark_addon.UnitHealthActual.CreateNew(target)
     end
-    local newHp = dark_addon.UnitHealthActual[target].hp + HealingSpells[spellID]
-    if newHp > UnitHealthMax(target) then
-        newHp = UnitHealthMax(target)
+    dark_addon.UnitHealthActual[guid].unitID = target
+    dark_addon.UnitHealthActual[guid].decreaseIncoming(HealingSpells[spellID])
+    local _, _, lagHome, lagWorld = GetNetStats()
+    local lag = (((lagHome + lagWorld) / 2) / 1000) * 2
+    lag = lag + dark_addon.settings.fetch('_engine_tickrate', 0.1)
+    if UnitIsUnit(caster,'player') then
+        C_Timer.After(lag, function() dark_addon.UnitHealthActual[guid].decreasePlayerIncoming(HealingSpells[spellID]) end)
     end
-    dark_addon.UnitHealthActual[target].hp = newHp
-    dark_addon.UnitHealthActual[target].lastupdate = GetTime()
 end)
