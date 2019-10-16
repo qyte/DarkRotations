@@ -1,55 +1,165 @@
 local addon, dark_addon = ...
 
-local HealingSpells = {
+local bonus = 0
+
+local heals = {}
+function heals:avg()
+    return math.floor((self.min + self.max)/2)
+end
+function heals:heal()
+    return math.floor(self.avg + self.coef * GetSpellBonusHealing())
+end
+function heals:hpm()
+    return math.floor(self.heal / GetSpellPowerCost(self.id)[1].cost)
+end
+function heals:hps()
+    return math.floor(self.heal / (select(4,GetSpellInfo(self.id)) / 1000))
+end
+
+dark_addon.healing = {
     --Druid
     --Regrowth
-    [8936] = "100",--rank1
-    [8938] = "190",--rank2
-    [8939] = "275",--rank3
-    [8940] = "360",--rank4
-    [8941] = "450",--rank5
-    [9750] = "580",--rank6
-    [9856] = "720",--rank7
-    [9857] = "890",--rank8
-    [9858] = "1070",--rank9
+    [8936] = {min=93,max=107,coef=0},  --rank1
+    [8938] = {min=176,max=201,coef=0},  --rank2
+    [8939] = {min=255,max=290,coef=0.5714},  --rank3
+    [8940] = {min=336,max=378,coef=0.5714},  --rank4
+    [8941] = {min=425,max=478,coef=0.5714},  --rank5
+    [9750] = {min=534,max=599,coef=0.5714},  --rank6
+    [9856] = {min=672,max=751,coef=0.5714},  --rank7
+    [9857] = {min=839,max=935,coef=0.5714},  --rank8
+    [9858] = {min=1003,max=1119,coef=0.5714},  --rank9
+
+    --Healing Touch
+    [5185] = {min=40,max=55,coef=0},  --rank1
+    [5186] = {min=94,max=119,coef=0},  --rank2
+    [5187] = {min=204,max=253,coef=0},  --rank3
+    [5188] = {min=376,max=459,coef=0.8571},  --rank4
+    [5189] = {min=589,max=712,coef=1},  --rank5
+    [6778] = {min=762,max=914,coef=1},  --rank6
+    [8903] = {min=958,max=1143,coef=1},  --rank7
+    [9758] = {min=1225,max=1453,coef=1},  --rank8
+    [9888] = {min=1545,max=1826,coef=1},  --rank9
+    [9889] = {min=1916,max=2257,coef=1},  --rank10
+    [25297] = {min=2267,max=2677,coef=1},  --rank11
+
+    --Priest
+    --Greater Heal
+    [2060] = {min=924,max=1034,coef=0.8571},--rank1
+    [10963] = {min=1178,max=1318,coef=0.8571},--rank2
+    [10964] = {min=1470,max=1642,coef=0.8571},--rank3
+    [10965] = {min=1813,max=2021,coef=0.8571},--rank4
+    [25314] = {min=1966,max=2194,coef=0.8571},--rank5
+    
+    --Prayer of Healing
+    [596] = {min=312,max=333,coef=0.8571},--rank1
+    [996] = {min=458,max=487,coef=0.8571},--rank2
+    [10960] = {min=675,max=713,coef=0.8571},--rank3
+    [10961] = {min=939,max=991,coef=0.8571},--rank4
+    [25316] = {min=1041,max=1099,coef=0.8571},--rank5
+    
+    --Flash Heal
+    [2061] = {min=202,max=247,coef=0.4286},--rank1
+    [9472] = {min=269,max=325,coef=0.4286},--rank2
+    [9473] = {min=339,max=406,coef=0.4286},--rank3
+    [9474] = {min=414,max=492,coef=0.4286},--rank4
+    [10915] = {min=534,max=633,coef=0.4286},--rank5
+    [10916] = {min=662,max=783,coef=0.4286},--rank6
+    [10917] = {min=828,max=975,coef=0.7143},--rank7
+    
+    --Heal
+    [2054] = {min=307,max=353,coef=0},--rank1
+    [2055] = {min=455,max=507,coef=0.8571},--rank2
+    [6063] = {min=586,max=662,coef=0.8571},--rank3
+    [6064] = {min=734,max=827,coef=0.8571},--rank4
+    
+    --Lesser Heal
+    [2050] = {min=47,max=58,coef=0},--rank1
+    [2052] = {min=76,max=91,coef=0},--rank2
+    [2053] = {min=143,max=165,coef=0},--rank3
 
     --Paladin
     --Flash of Light
-    [19750] = "72",--rank1
-    [19939] = "110",--rank2
-    [19940] = "162",--rank3
-    [19941] = "218",--rank4
-    [19942] = "294",--rank5
-    [19943] = "368",--rank6
+    [19750] = {min=67,max=77,coef=0.4286},--rank1
+    [19939] = {min=102,max=117,coef=0.4286},--rank2
+    [19940] = {min=153,max=171,coef=0.4286},--rank3
+    [19941] = {min=206,max=231,coef=0.4286},--rank4
+    [19942] = {min=278,max=310,coef=0.4286},--rank5
+    [19943] = {min=348,max=389,coef=0.4286},--rank6
     --Holy Light
-    [635] = "46",--rank1
-    [639] = "88",--rank2
-    [647] = "181",--rank3
-    [1026] = "345",--rank4
-    [1042] = "538",--rank5
-    [3472] = "758",--rank6
-    [10328] = "1022",--rank7
-    [10329] = "1343",--rank8
-    [25292] = "1680"--rank9
+    [635] = {min=42,max=51,coef=0},--rank1
+    [639] = {min=81,max=96,coef=0},--rank2
+    [647] = {min=167,max=196,coef=0},--rank3
+    [1026] = {min=322,max=368,coef=0.7143},--rank4
+    [1042] = {min=506,max=569,coef=0.7143},--rank5
+    [3472] = {min=717,max=799,coef=0.7143},--rank6
+    [10328] = {min=968,max=1076,coef=0.7143},--rank7
+    [10329] = {min=1272,max=1414,coef=0.7143},--rank8
+    [25292] = {min=1590,max=1770,coef=0.7143},--rank9
+
+    --Shaman
+    --Healing Wave
+    [331] = {min=36,max=47,coef=0},  --rank1
+    [332] = {min=69,max=83,coef=0},  --rank2
+    [547] = {min=136,max=163,coef=0},  --rank3
+    [913] = {min=279,max=328,coef=0},  --rank4
+    [939] = {min=389,max=454,coef=0.8571},  --rank5
+    [959] = {min=552,max=639,coef=0.8571},  --rank6
+    [8005] = {min=759,max=874,coef=0.8571},  --rank7
+    [10395] = {min=1040,max=1191,coef=0.8571},  --rank8
+    [10396] = {min=1389,max=1583,coef=0.8571},  --rank9
+    
+    --Lesser Healing Wave
+    [8004] = {min=170,max=195,coef=0.4286},--rank1
+    [8008] = {min=257,max=292,coef=0.4286},--rank2
+    [8010] = {min=349,max=394,coef=0.4286},--rank3
+    [10466] = {min=473,max=529,coef=0.4286},--rank4
+    [10467] = {min=649,max=723,coef=0.4286},--rank5
+
+    --Chain Heal
+    [1064] = {min=332,max=381,coef=0.7143},--rank1
+    [10622] = {min=419,max=479,coef=0.7143}--rank2
 }
 
+local HealingSpells = dark_addon.healing
+
+for key,t in pairs(HealingSpells) do
+    t.id = key
+    setmetatable(t,{__index = function(t, k) return heals[k](t) end})
+end
+function dark_addon.healing.CastBestHpm(unit, effective)
+    --body
+end
+function dark_addon.healing.CastBestHps(unit, effective)
+    --body
+end
+
+
 local healths = {}
+function healths:hp()
+    self.lastupdate = GetTime()
+    return _G.UnitHealth(self.unitID)
+end
 function healths:actual()
     if GetTime() - self.lastupdate > 5 then
-        self:update()
+        self.playerInc = 0
     end
     return self.hp + self.playerInc
 end
-function healths:update()
-    self.hp = UnitHealth(self.unitID)
-    self.lastupdate = GetTime()
+function healths:effective()
+    return self.hp + self.incoming
 end
 function healths:decreaseIncoming(value)
     self.incoming = self.incoming - value
+    if self.incoming < 0 then
+        self.incoming = 0
+    end
     self.lastupdate = GetTime()
 end
 function healths:decreasePlayerIncoming(value)
     self.playerInc = self.playerInc - value
+    if self.playerInc < 0 then
+        self.playerInc = 0
+    end
     self.lastupdate = GetTime()
 end
 function healths:increaceIncoming(value)
@@ -61,24 +171,52 @@ function healths:increacePlayerIncoming(value)
     self.lastupdate = GetTime()
 end
 
-dark_addon.UnitHealthActual = {}
-function dark_addon.UnitHealthActual.CreateNew(unit)
-  return setmetatable({
-    unitID = unit,
-    unitGUID = UnitGUID(unit),
-    hp = UnitHealth(unit),
-    playerInc = 0,
-    incoming = 0,
-    lastupdate = GetTime()
-  }, {
-    __index = function(t, k)
-      return healths[k](t)
+dark_addon.UnitHealth = {}
+setmetatable(dark_addon.UnitHealth,{
+    __call = function(t,arg)
+        local unit = arg
+        if type(arg) == 'table' then
+            unit = arg.unitID
+        end
+        local idx = UnitGUID(unit)
+        if not idx then return t[unit] end
+        if t[idx] then return t[idx] end
+        t[idx] = setmetatable({
+            unitID = unit,
+            unitGUID = idx,
+            playerInc = 0,
+            incoming = 0,
+            lastupdate = GetTime()
+          }, {
+            __index = function(t, k)
+              return healths[k](t)
+            end
+          })
+        return t[idx]
     end
-  })
+})
+
+function dark_addon.UnitHealth.clear()
+    local t = dark_addon.UnitHealth
+    for key,_ in pairs(t) do
+        t[key] = nil
+    end
 end
 
 local spellTargetTracker = {}
+function spellTargetTracker.clear()
+    local t = spellTargetTracker
+    for key,_ in pairs(t) do
+        t[key] = nil
+    end
+end
 
+dark_addon.event.register("PLAYER_ENTERING_WORLD", function()
+    bonus = GetSpellBonusHealing()
+    dark_addon.UnitHealth.clear()
+    spellTargetTracker.clear()
+end)
+--[[
 dark_addon.event.register("UNIT_HEALTH", function(unit)
     local guid = UnitGUID(unit)
 	if not dark_addon.UnitHealthActual[guid] then
@@ -86,17 +224,18 @@ dark_addon.event.register("UNIT_HEALTH", function(unit)
     end
     dark_addon.UnitHealthActual[guid].unitID = unit
     dark_addon.UnitHealthActual[guid].update()
-end)
+end)]]
 
 local function failedSpellCast(caster, castGUID, spellID)
     if not HealingSpells[spellID] then return end
     if not spellTargetTracker[castGUID] then return end
     local guid = spellTargetTracker[castGUID].guid
     spellTargetTracker[castGUID] = nil
-    if not dark_addon.UnitHealthActual[guid] then return end
-    dark_addon.UnitHealthActual[guid].decreaseIncoming(HealingSpells[spellID])
+    local health = dark_addon.UnitHealth(guid)
+    if not health then return end
+    health.decreaseIncoming(HealingSpells[spellID].avg)
     if UnitIsUnit(caster,'player') then
-        dark_addon.UnitHealthActual[guid].decreasePlayerIncoming(HealingSpells[spellID])
+        health.decreasePlayerIncoming(HealingSpells[spellID].avg)
     end
 end
 
@@ -111,14 +250,10 @@ dark_addon.event.register("UNIT_SPELLCAST_SENT", function(caster, target, castGU
     spellTargetTracker[castGUID].target = target
     spellTargetTracker[castGUID].guid = UnitGUID(target)
     local guid = spellTargetTracker[castGUID].guid
-    if not dark_addon.UnitHealthActual[guid] then
-        dark_addon.UnitHealthActual[guid] = dark_addon.UnitHealthActual.CreateNew(target)
-    end
-    dark_addon.UnitHealthActual[guid].unitID = target
-    dark_addon.UnitHealthActual[guid].increaceIncoming(HealingSpells[spellID])
-    --dark_addon.UnitHealthActual[guid].update()
+    local health = dark_addon.UnitHealth(target)
+    health.increaceIncoming(HealingSpells[spellID].heal)
     if UnitIsUnit(caster,'player') then
-        dark_addon.UnitHealthActual[guid].increacePlayerIncoming(HealingSpells[spellID])
+        health.increacePlayerIncoming(HealingSpells[spellID].heal)
     end
 end)
 
@@ -126,15 +261,12 @@ dark_addon.event.register("UNIT_SPELLCAST_SUCCEEDED", function(caster, castGUID,
     if not HealingSpells[spellID] then return end
     local guid = spellTargetTracker[castGUID].guid
     local target = spellTargetTracker[castGUID].target
-    if not dark_addon.UnitHealthActual[guid] then
-        dark_addon.UnitHealthActual[guid] = dark_addon.UnitHealthActual.CreateNew(target)
-    end
-    dark_addon.UnitHealthActual[guid].unitID = target
-    dark_addon.UnitHealthActual[guid].decreaseIncoming(HealingSpells[spellID])
+    local health = dark_addon.UnitHealth(target)
+    health.decreaseIncoming(HealingSpells[spellID].heal)
     local _, _, lagHome, lagWorld = GetNetStats()
     local lag = (((lagHome + lagWorld) / 2) / 1000) * 2
     lag = lag + dark_addon.settings.fetch('_engine_tickrate', 0.1)
     if UnitIsUnit(caster,'player') then
-        C_Timer.After(lag, function() dark_addon.UnitHealthActual[guid].decreasePlayerIncoming(HealingSpells[spellID]) end)
+        C_Timer.After(lag, function() health.decreasePlayerIncoming(HealingSpells[spellID].heal) end)
     end
 end)

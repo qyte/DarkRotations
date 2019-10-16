@@ -11,35 +11,12 @@ dark_addon.environment = {
 local env = { }
 
 local function UnitHealth(unit)
-  -- if the unit is on cooldown then its health hasn't been updated yet so..
-  -- lowest shouldn't be selecting it. and. the health checking in a CR
-  -- shouldn't see the stale health value. so report MaxHealth instead.
-  local guid = UnitGUID(unit)
-  if not dark_addon.UnitHealthActual[guid] then
-    return _G.UnitHealth(unit)
-  end
-  --[[if GetTime() - dark_addon.UnitHealthActual[guid].lastupdate > 1 then
-    dark_addon.UnitHealthActual[unit].hp = _G.UnitHealth(unit)
-    dark_addon.UnitHealthActual[unit].lastupdate = GetTime()
-    return _G.UnitHealth(unit)
-  end]]
-  return dark_addon.UnitHealthActual[unit].actual
+  return dark_addon.UnitHealth(unit).actual
 end
---[[
-  if dark_addon.healthCooldown[unit] ~= nil then
-    if dark_addon.healthCooldown[unit] > GetTime() then
-      dark_addon.console.debug(1, 'engine', 'engine', string.format('unit %s (health/max %s/%s) is on cooldown', UnitName(unit), _G.UnitHealth(unit), UnitHealthMax(unit)))
-      return UnitHealthMax(unit)
-    end
-  end
-  return _G.UnitHealth(unit)
-end]]
 dark_addon.environment.UnitHealth = UnitHealth
 
 local function UnitGetIncomingHeals(unit)
-  local guid = UnitGUID(unit)
-  if not dark_addon.UnitHealthActual[guid] then return 0 end
-  return dark_addon.UnitHealthActual[guid].incoming
+  return dark_addon.UnitHealth(unit).incoming
 end
 
 dark_addon.environment.UnitGetIncomingHeals = UnitGetIncomingHeals
