@@ -7,7 +7,7 @@ function heals:avg()
     return math.floor((self.min + self.max)/2)
 end
 function heals:heal()
-    return math.floor(self.avg + self.coef * GetSpellBonusHealing())
+    return math.floor(self.avg + (self.coef * bonus))
 end
 function heals:hpm()
     return math.floor(self.heal / GetSpellPowerCost(self.id)[1].cost)
@@ -211,12 +211,12 @@ function spellTargetTracker.clear()
     end
 end
 
+--[[
 dark_addon.event.register("PLAYER_ENTERING_WORLD", function()
     bonus = GetSpellBonusHealing()
     dark_addon.UnitHealth.clear()
     spellTargetTracker.clear()
 end)
---[[
 dark_addon.event.register("UNIT_HEALTH", function(unit)
     local guid = UnitGUID(unit)
 	if not dark_addon.UnitHealthActual[guid] then
