@@ -2,7 +2,10 @@ local addon, dark_addon = ...
 
 function _CastSpellByName(spell, target)
   local target = target or "target"
-  if target ~= nil and not UnitCanAttack('player', target) and UnitName(target) ~= nil and dark_addon.healing[select(7,GetSpellInfo(spell))] then
+  if UnitCanAttack('player', target) and dark_addon.healing[select(7,GetSpellInfo(spell))] then
+    target = 'player'
+  end
+  if not UnitCanAttack('player', target) and UnitName(target) ~= nil and dark_addon.healing[select(7,GetSpellInfo(spell))] then
     dark_addon.savedHealTarget = target
     dark_addon.console.debug(1, 'engine', 'engine', string.format('casting spell %s on %s. UnitHealth %d', spell, UnitName(target), UnitHealth(target)))
   end
