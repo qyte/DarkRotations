@@ -2,6 +2,10 @@ local addon, dark_addon = ...
 
 function _CastSpellByName(spell, target)
   local target = target or "target"
+  if target ~= nil and not UnitCanAttack('player', target) and UnitName(target) ~= nil and dark_addon.healing[select(7,GetSpellInfo(spell))] then
+    dark_addon.savedHealTarget = target
+    dark_addon.console.debug(1, 'engine', 'engine', string.format('casting spell %s on %s. UnitHealth %d', spell, UnitName(target), UnitHealth(target)))
+  end
   if dark_addon.luabox == true then
     __LB__.Unlock(CastSpellByName, spell, target)
     dark_addon.console.debug(2, 'cast', 'red', spell .. ' on ' .. target)
@@ -27,10 +31,9 @@ function _CastSpellByName(spell, target)
       if secured then
         dark_addon.console.debug(2, 'cast', 'red', spell .. ' on ' .. target)
         dark_addon.interface.status(spell)
-         end
-       end
       end
-
+    end
+  end
 end
 
 end
@@ -68,14 +71,14 @@ end
 
 function _CastSpellByID(spell, target)
   if tonumber(spell) then
-    spell, _ = GetSpellInfo(spell)
+    spell = dark_addon.environment.GetSpellName(spell)
   end
   return _CastSpellByName(spell, target)
 end
 
 function _CastGroundSpellByID(spell, target)
   if tonumber(spell) then
-    spell, _ = GetSpellInfo(spell)
+    spell = dark_addon.environment.GetSpellName(spell)
   end
   return _CastGroundSpellByName(spell, target)
 end

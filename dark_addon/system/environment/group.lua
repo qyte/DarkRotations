@@ -75,7 +75,7 @@ function group:dispellable(spell)
   return group_dispellable
 end
 
-function group_under(...)
+local function group_under(...)
   local percent, distance, effective = ...
   return group_count(function (unit)
     return unit.alive

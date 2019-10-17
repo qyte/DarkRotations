@@ -23,13 +23,13 @@ local function heal()--HealingTouch Regrowth Rejuvenation
     end
   end
   if lowest.health.percent <= Regrowthpct then
-    if castable(SB.Regrowth) and player.buff(SB.Regrowth).down then
+    if castable(SB.Regrowth) and lowest.buff(SB.Regrowth).down then
       cast(SB.Regrowth,'player')
       return true
     end
   end
   if lowest.health.percent <= Rejuvpct then
-    if castable(SB.Rejuvenation) and player.buff(SB.Rejuvenation).down then
+    if castable(SB.Rejuvenation) and lowest.buff(SB.Rejuvenation).down then
       cast(SB.Rejuvenation,'player')
       return true
     end
