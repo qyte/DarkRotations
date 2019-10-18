@@ -228,23 +228,41 @@ dark_addon.event.register("UNIT_SPELLCAST_FAILED", failedSpellCast)
 
 dark_addon.event.register("UNIT_SPELLCAST_START", function(caster, castGUID, spellID)
     if not HealingSpells[spellID] then return end
+    dark_addon.console.debug(1, 'engine', 'engine', string.format('STARTED spell %s by %s',dark_addon.environment.GetSpellName(spellID),caster))
     if not spellTargetTracker[castGUID] then
         dark_addon.console.debug(1, 'engine', 'engine', string.format('casting STARTED before SENT spell %s',dark_addon.environment.GetSpellName(spellID)))
     end
 end)
 
+dark_addon.event.register("UNIT_SPELLCAST_DELAYED", function(caster, castGUID, spellID)
+    if not HealingSpells[spellID] then return end
+    if not spellTargetTracker[castGUID] then return end
+    dark_addon.console.debug(1, 'engine', 'engine', string.format('DELAYED spell %s',dark_addon.environment.GetSpellName(spellID)))
+end)
+
+local function findUnitByName(target)
+    local group = dark_addon.environment.group
+    if UnitGUID(target) then return unit end
+    if dark_addon.savedHealTarget and UnitName(target) == UnitName(dark_addon.savedHealTarget) then return dark_addon.savedHealTarget end
+    local groupmember = dark_addon.environment.group.match(function (unit) return UnitName(unit) == UnitName(target) end )
+    if groupmember then return groupmember.unitID end
+    return false
+end
+
 dark_addon.event.register("UNIT_SPELLCAST_SENT", function(caster, target, castGUID, spellID)
     if not HealingSpells[spellID] then return end
     if not UnitGUID(target) and not dark_addon.savedHealTarget then return end
     spellTargetTracker[castGUID] = dark_addon.savedHealTarget or target
+    if not UnitGUID(spellTargetTracker[castGUID]) then
+        spellTargetTracker[castGUID] = nil
+        return
+    end
     dark_addon.savedHealTarget = false
-    local health = dark_addon.UnitHealth(target)
-    dark_addon.console.debug(1, 'engine', 'engine', string.format('SENT %s on %s. UnitHealth %d', dark_addon.environment.GetSpellName(spellID), target, health.actual))
+    local health = dark_addon.UnitHealth(spellTargetTracker[castGUID])
     increaceIncoming(health, HealingSpells[spellID].heal)
     if UnitIsUnit(caster,'player') then
         increacePlayerIncoming(health, HealingSpells[spellID].heal)
     end
-    dark_addon.console.debug(1, 'engine', 'engine', string.format('UnitHealth of %s is now %d', target, health.actual))
 end)
 
 dark_addon.event.register("UNIT_SPELLCAST_SUCCEEDED", function(caster, castGUID, spellID)
@@ -260,8 +278,6 @@ dark_addon.event.register("UNIT_SPELLCAST_SUCCEEDED", function(caster, castGUID,
     if UnitIsUnit(caster,'player') then
         C_Timer.After(lag, function()
             decreasePlayerIncoming(health, HealingSpells[spellID].heal)
-            dark_addon.console.debug(1, 'engine', 'engine', string.format('UnitHealth of %s is now %d', target, health.actual))
         end)
     end
-    dark_addon.console.debug(1, 'engine', 'engine', string.format('Finished %s on %s. UnitHealth %d', dark_addon.environment.GetSpellName(spellID), target, health.actual))
 end)

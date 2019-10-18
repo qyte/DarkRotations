@@ -12,6 +12,8 @@ dark_addon.ready_callbacks = { }
 dark_addon.protected = false
 dark_addon.adv_protected = false
 dark_addon.libcc = LibStub("LibClassicCasterino")
+dark_addon.LibClassicDurations = LibStub("LibClassicDurations")
+dark_addon.Healcomm = LibStub("LibClassicHealComm-1.0")
 dark_addon.savedHealTarget = nil
 dark_addon.healthCooldown = {}
 
@@ -23,3 +25,5 @@ local libccstub = function(event, ...) return end
 dark_addon.libcc.RegisterCallback(dark_addon.name,"UNIT_SPELLCAST_START", libccstub)
 UnitCastingInfo = function(unit) return dark_addon.libcc:UnitCastingInfo(unit) end
 UnitChannelInfo = function(unit) return dark_addon.libcc:UnitChannelInfo(unit) end
+
+dark_addon.LibClassicDurations:Register(addon)
