@@ -133,6 +133,17 @@ function dark_addon.healing.CastBestHps(unit, effective)
     --body
 end
 
+
+-- API CONSTANTS
+--local ALL_DATA = 0x0f
+local DIRECT_HEALS = 0x01
+local CHANNEL_HEALS = 0x02
+local HOT_HEALS = 0x04
+--local ABSORB_SHIELDS = 0x08
+local ALL_HEALS = bit.bor(DIRECT_HEALS, CHANNEL_HEALS, HOT_HEALS)
+local CASTED_HEALS = bit.bor(DIRECT_HEALS, CHANNEL_HEALS)
+local OVERTIME_HEALS = bit.bor(HOT_HEALS, CHANNEL_HEALS)
+
 local UnitHealth = _G.UnitHealth
 local UnitHealthMax = _G.UnitHealthMax
 local UnitIsUnit = _G.UnitIsUnit
@@ -146,17 +157,9 @@ end
 function healths:effective()
     return self.hp + self.incoming
 end
-local function increaceIncoming(self, value)
-    self.incoming = self.incoming + value
-end
-local function decreaseIncoming(self, value)
-    self.incoming = self.incoming - value
-    if self.incoming < 0 then
-        self.incoming = 0
-    end
-end
-local function increacePlayerIncoming(self, value)
-    self.playerInc = self.playerInc + value
+function healths:incoming()
+    if UnitCanAttack('player',self.unitID) then return 0 end
+    return dark_addon.Healcomm:GetHealAmount(self.unitGUID,ALL_HEALS) or 0
 end
 local function decreasePlayerIncoming(self, value)
     self.playerInc = self.playerInc - value
@@ -164,6 +167,9 @@ local function decreasePlayerIncoming(self, value)
         self.playerInc = 0
     end
 end
+
+local playerGUID = nil
+local healunit = dark_addon.savedHealTarget
 
 dark_addon.UnitHealth = {}
 setmetatable(dark_addon.UnitHealth,{
@@ -174,12 +180,42 @@ setmetatable(dark_addon.UnitHealth,{
         end
         local idx = UnitGUID(unit)
         if not idx then return t[unit] end --assuming a guid is passed as param
-        if t[idx] then return t[idx] end
+        if UnitCanAttack('player',unit) then
+            return setmetatable({
+                unitID = unit,
+                unitGUID = idx,
+                playerInc = 0
+              }, {
+                __index = function(t, k)
+                  return healths[k](t)
+                end
+              })
+        end
+        local playerheal = 0
+        local spellcast = CastingInfo()
+        if CastingInfo() then
+            playerheal = dark_addon.Healcomm:GetHealAmount(idx,DIRECT_HEALS,nil,playerGUID) or 0
+            local playerhealafter = dark_addon.Healcomm:GetHealAmount(idx,DIRECT_HEALS,GetTime() + 0.5,playerGUID) or 0
+            playerheal = playerheal - playerhealafter
+            if playerheal > 0 then
+                healunit = unit
+            end
+        end
+        if t[idx] then
+            t[idx].unitID = unit
+            --[[if playerheal == 0 and t[idx].playerInc > 0 then
+                local lag = select(4, GetNetStats()) / 1000
+                local castclip = dark_addon.settings.fetch('_engine_castclip', 0.15)
+                local ticker = dark_addon.settings.fetch('_engine_tickrate', 0.1)
+                lag = lag + ticker + castclip
+            end]]
+            t[idx].playerInc = playerheal
+            return t[idx]
+        end
         t[idx] = setmetatable({
             unitID = unit,
             unitGUID = idx,
-            playerInc = 0,
-            incoming = 0
+            playerInc = playerheal
           }, {
             __index = function(t, k)
               return healths[k](t)
@@ -199,6 +235,7 @@ local spellTargetTracker = {}
 
 dark_addon.event.register("PLAYER_ENTERING_WORLD", function()
     bonus = GetSpellBonusHealing()
+    playerGUID = UnitGUID('player')
     cleartable(dark_addon.UnitHealth)
     cleartable(spellTargetTracker)
 end)
@@ -207,14 +244,19 @@ dark_addon.event.register("UNIT_HEALTH", function(unit)
     dark_addon.UnitHealth(unit)
 end)
 
+dark_addon.on_ready(function()
+    local lag = select(4, GetNetStats()) / 1000
+    local castclip = dark_addon.settings.fetch('_engine_castclip', 0.15)
+    local ticker = dark_addon.settings.fetch('_engine_tickrate', 0.1)
+    lag = lag + ticker + castclip
+    if not healunit then return end
+end)
 local function failedSpellCast(caster, castGUID, spellID)
     if not HealingSpells[spellID] then return end
     if not spellTargetTracker[castGUID] then return end
     local health = dark_addon.UnitHealth(spellTargetTracker[castGUID])
     spellTargetTracker[castGUID] = nil
     if not health then return end
-    dark_addon.console.debug(1, 'engine', 'engine', string.format('casting FAILED spell %s',dark_addon.environment.GetSpellName(spellID)))
-    decreaseIncoming(health, HealingSpells[spellID].heal)
     if UnitIsUnit(caster,'player') then
         decreasePlayerIncoming(health, HealingSpells[spellID].heal)
     end
@@ -259,7 +301,6 @@ dark_addon.event.register("UNIT_SPELLCAST_SENT", function(caster, target, castGU
     end
     dark_addon.savedHealTarget = false
     local health = dark_addon.UnitHealth(spellTargetTracker[castGUID])
-    increaceIncoming(health, HealingSpells[spellID].heal)
     if UnitIsUnit(caster,'player') then
         increacePlayerIncoming(health, HealingSpells[spellID].heal)
     end
@@ -271,7 +312,6 @@ dark_addon.event.register("UNIT_SPELLCAST_SUCCEEDED", function(caster, castGUID,
     local target = spellTargetTracker[castGUID]
     spellTargetTracker[castGUID] = nil
     local health = dark_addon.UnitHealth(target)
-    decreaseIncoming(health, HealingSpells[spellID].heal)
     local _, _, lagHome, lagWorld = GetNetStats()
     local lag = (((lagHome + lagWorld) / 2) / 1000) * 2
     lag = lag + dark_addon.settings.fetch('_engine_tickrate', 0.1)
