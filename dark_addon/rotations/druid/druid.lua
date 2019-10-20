@@ -13,12 +13,12 @@ end
 setfenv(buffs, dark_addon.environment.env)
 
 local function heal()--HealingTouch Regrowth Rejuvenation
-  local HealingTouchpct = 50
+  local HealingTouchpct = 80
   local Regrowthpct = 70
-  local Rejuvpct = 80
+  local Rejuvpct = 60
   if lowest.health.percent <= HealingTouchpct then
-    if castable(SB.HealingTouch) then
-      cast(SB.HealingTouch,'player')
+    if castable(SB.HealingTouch[1]) then
+      cast(SB.HealingTouch[1],'player')
       return true
     end
   end

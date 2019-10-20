@@ -5,10 +5,10 @@ function _CastSpellByName(spell, target)
   if UnitCanAttack('player', target) and dark_addon.healing[select(7,GetSpellInfo(spell))] then
     target = 'player'
   end
-  if not UnitCanAttack('player', target) and UnitName(target) ~= nil and dark_addon.healing[select(7,GetSpellInfo(spell))] then
+  --[[if not UnitCanAttack('player', target) and UnitName(target) ~= nil and dark_addon.healing[select(7,GetSpellInfo(spell))] then
     dark_addon.savedHealTarget = target
     dark_addon.console.debug(1, 'engine', 'engine', string.format('casting spell %s on %s. UnitHealth %d', spell, UnitName(target), UnitHealth(target)))
-  end
+  end]]
   if dark_addon.luabox == true then
     __LB__.Unlock(CastSpellByName, spell, target)
     dark_addon.console.debug(2, 'cast', 'red', spell .. ' on ' .. target)
@@ -176,6 +176,9 @@ local function auto_shoot()
 end
 
 function _RunMacroText(text)
+  if strfind(text,'\n') then
+    text = text:trim():gsub("%s+", " "):gsub(" /", "\n/")
+  end
   if dark_addon.adv_protected then
     RunMacroText(text)
     dark_addon.console.debug(2, 'macro', 'red', text)
