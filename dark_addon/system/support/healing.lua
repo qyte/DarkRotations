@@ -7,8 +7,8 @@ function heals:avg()
     return math.floor((self.min + self.max)/2)
 end
 function heals:heal()
-    return select(2,dark_addon.Healcomm.CalculateHealing(nil,self.id))
-    --return math.floor(self.avg + (self.coef * bonus))
+    --return select(2,dark_addon.Healcomm.CalculateHealing(nil,self.id))
+    return math.floor(self.avg + (self.coef * bonus)) --TODO add healcomm calculation instead
 end
 function heals:hpm()
     return math.floor(self.heal / GetSpellPowerCost(self.id)[1].cost)
@@ -150,11 +150,11 @@ local UnitHealthMax = _G.UnitHealthMax
 local UnitIsUnit = _G.UnitIsUnit
 local healths = {}
 function healths:hp()
-    if not self.unitID then return 0 end
+    if not self.unitID then return 100 end
     return UnitHealth(self.unitID)
 end
 function healths:actual()
-    if not self.unitID then return 0 end
+    if not self.unitID then return 100 end
     return self.hp + self.playerInc
 end
 function healths:effective()
@@ -165,12 +165,6 @@ function healths:incoming()
     if not self.unitID then return 0 end
     if UnitCanAttack('player',self.unitID) then return 0 end
     return dark_addon.Healcomm:GetHealAmount(self.unitGUID,ALL_HEALS) or 0
-end
-local function decreasePlayerIncoming(self, value)
-    self.playerInc = self.playerInc - value
-    if self.playerInc < 0 then
-        self.playerInc = 0
-    end
 end
 
 local playerGUID = nil
@@ -232,101 +226,31 @@ local function cleartable(t)
     end
 end
 
---local spellTargetTracker = {}
-
 dark_addon.event.register("PLAYER_ENTERING_WORLD", function()
-    bonus = GetSpellBonusHealing()
     playerGUID = UnitGUID('player')
     cleartable(dark_addon.UnitHealth)
-    --cleartable(spellTargetTracker)
 end)
---[[dark_addon.event.register("UNIT_HEALTH", function(unit)
-    if UnitCanAttack('player', unit) then return end
-    dark_addon.UnitHealth(unit)
-end)]]
 
 dark_addon.Healcomm.RegisterCallback(dark_addon.name,'HealComm_HealStopped',function(event, casterGUID, spellID, bitType, interrupted,...)
-    if casterGUID ~= playerGUID then return end
-    if bitType ~= DIRECT_HEALS then return end
+    if not casterGUID == playerGUID then return end
+    if not bitType == DIRECT_HEALS then return end
     if interrupted then return end
     if not HealingSpells[spellID] then return end
+    if not dark_addon.settings.fetch('_engine_healcd.check', true) then return end
+    bonus = GetSpellBonusHealing()
     local lag = select(4, GetNetStats()) / 1000
-    local castclip = dark_addon.settings.fetch('_engine_castclip', 0.15)
-    local ticker = dark_addon.settings.fetch('_engine_tickrate', 0.1)
-    lag = lag + ticker + castclip
+    --local castclip = dark_addon.settings.fetch('_engine_castclip', 0.15)
+    local ticker = dark_addon.settings.fetch('_engine_healcd.spin', 0.1)
+    lag = lag + ticker --+ castclip
     for i=1, select("#", ...) do
         local unit = dark_addon.Healcomm.guidToUnit[select(i, ...)]
         if unit then
             local health = dark_addon.UnitHealth(unit)
             health.playerInc = HealingSpells[spellID].heal
-            dark_addon.console.debug(1, 'engine', 'engine', string.format('UnitHealth update of %s is now %d', unit, health.actual * 100 / UnitHealthMax(unit)))
+            --dark_addon.console.debug(1, 'engine', 'engine', string.format('UnitHealth update of %s is now %d', unit, health.actual * 100 / UnitHealthMax(unit)))
             C_Timer.After(lag, function()
-                decreasePlayerIncoming(health, HealingSpells[spellID].heal)
+                health.playerInc = 0
             end)
         end
     end
 end)
---[[
-local function failedSpellCast(caster, castGUID, spellID)
-    if not HealingSpells[spellID] then return end
-    if not spellTargetTracker[castGUID] then return end
-    local health = dark_addon.UnitHealth(spellTargetTracker[castGUID])
-    spellTargetTracker[castGUID] = nil
-    if not health then return end
-    if UnitIsUnit(caster,'player') then
-        decreasePlayerIncoming(health, HealingSpells[spellID].heal)
-    end
-    dark_addon.console.debug(1, 'engine', 'engine', string.format('UnitHealth of %s is now %d', target, health.actual))
-end
-
-dark_addon.event.register("UNIT_SPELLCAST_STOP", failedSpellCast)
-dark_addon.event.register("UNIT_SPELLCAST_INTERRUPTED", failedSpellCast)
-dark_addon.event.register("UNIT_SPELLCAST_FAILED_QUIET", failedSpellCast)
-dark_addon.event.register("UNIT_SPELLCAST_FAILED", failedSpellCast)
-
-dark_addon.event.register("UNIT_SPELLCAST_START", function(caster, castGUID, spellID)
-    if not HealingSpells[spellID] then return end
-    spellTargetTracker[castGUID].state = true
-    spellTargetTracker[castGUID].spell = spellID
-    dark_addon.console.debug(1, 'engine', 'engine', string.format('STARTED spell %s by %s',dark_addon.environment.GetSpellName(spellID),caster))
-    if not spellTargetTracker[castGUID] then
-        dark_addon.console.debug(1, 'engine', 'engine', string.format('casting STARTED before SENT spell %s',dark_addon.environment.GetSpellName(spellID)))
-    end
-end)
-
-
-dark_addon.event.register("UNIT_SPELLCAST_DELAYED", function(caster, castGUID, spellID)
-    if not HealingSpells[spellID] then return end
-    if not spellTargetTracker[castGUID] then return end
-    dark_addon.console.debug(1, 'engine', 'engine', string.format('DELAYED spell %s',dark_addon.environment.GetSpellName(spellID)))
-end)
-dark_addon.event.register("UNIT_SPELLCAST_SENT", function(caster, target, castGUID, spellID)
-    if not HealingSpells[spellID] then return end
-    if not UnitGUID(target) and not dark_addon.savedHealTarget then return end
-    spellTargetTracker[castGUID] = dark_addon.savedHealTarget or target
-    if not UnitGUID(spellTargetTracker[castGUID]) then
-        spellTargetTracker[castGUID] = nil
-        return
-    end
-    dark_addon.savedHealTarget = false
-    local health = dark_addon.UnitHealth(spellTargetTracker[castGUID])
-    if UnitIsUnit(caster,'player') then
-        increacePlayerIncoming(health, HealingSpells[spellID].heal)
-    end
-end)
-
-dark_addon.event.register("UNIT_SPELLCAST_SUCCEEDED", function(caster, castGUID, spellID)
-    if not HealingSpells[spellID] then return end
-    if not spellTargetTracker[castGUID] then return end
-    local target = spellTargetTracker[castGUID]
-    spellTargetTracker[castGUID] = nil
-    local health = dark_addon.UnitHealth(target)
-    local _, _, lagHome, lagWorld = GetNetStats()
-    local lag = (((lagHome + lagWorld) / 2) / 1000) * 2
-    lag = lag + dark_addon.settings.fetch('_engine_tickrate', 0.1)
-    if UnitIsUnit(caster,'player') then
-        C_Timer.After(lag, function()
-            decreasePlayerIncoming(health, HealingSpells[spellID].heal)
-        end)
-    end
-end)]]

@@ -5,10 +5,6 @@ function _CastSpellByName(spell, target)
   if UnitCanAttack('player', target) and dark_addon.healing[select(7,GetSpellInfo(spell))] then
     target = 'player'
   end
-  --[[if not UnitCanAttack('player', target) and UnitName(target) ~= nil and dark_addon.healing[select(7,GetSpellInfo(spell))] then
-    dark_addon.savedHealTarget = target
-    dark_addon.console.debug(1, 'engine', 'engine', string.format('casting spell %s on %s. UnitHealth %d', spell, UnitName(target), UnitHealth(target)))
-  end]]
   if dark_addon.luabox == true then
     __LB__.Unlock(CastSpellByName, spell, target)
     dark_addon.console.debug(2, 'cast', 'red', spell .. ' on ' .. target)
@@ -234,11 +230,6 @@ function dark_addon.environment.hooks.cast(spell, target)
   if not dark_addon.protected then return end
   if type(target) == 'table' then target = target.unitID end
   if type(spell) == 'table' then spell = spell.namerank end
-  --[[if target ~= nil and not UnitCanAttack('player', target) and enablehcd and UnitName(target) ~= nil then
-    dark_addon.savedHealTarget = target
-    if tonumber(spell) then spell, _ = GetSpellInfo(spell) end
-    dark_addon.console.debug(1, 'engine', 'engine', string.format('casting spell %s on %s. UnitHealth %d', spell, UnitName(target), UnitHealth(target)))
-  end]]
   if turbo or not CastingInfo('player') then
     if target == 'ground' then
       if tonumber(spell) then

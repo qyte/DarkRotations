@@ -108,7 +108,7 @@ dark_addon.environment.unit_buff = function(target, spell, owner)
   local i = 0; local go = true
   while i <= 100 and go do
     i = i + 1
-    buff, _, count, _, duration, expires, caster, stealable, _, spellID = dark_addon.libCD:UnitAura(target,i,"HELPFUL") --_G['UnitBuff'](target, i)
+    buff, _, count, _, duration, expires, caster, stealable, _, spellID = dark_addon.libCD:UnitAura(target,i,"HELPFUL") -- _G['UnitBuff'](target, i)
     if not owner then
       if ((tonumber(spell) and spellID == tonumber(spell)) or buff == spell) and caster == "player" then go = false end
     elseif owner == "any" then

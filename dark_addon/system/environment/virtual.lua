@@ -34,7 +34,6 @@ function dark_addon.environment.virtual.targets.lowest()
   end
 end
 
-
 function dark_addon.environment.virtual.resolvers.unit(unitA, unitB)
   local healthA = UnitHealth(unitA) / UnitHealthMax(unitA) * 100
   local healthB = UnitHealth(unitB) / UnitHealthMax(unitB) * 100
@@ -77,9 +76,41 @@ function dark_addon.environment.virtual.resolvers.raid(members)
   return lowest
 end
 
-
-
 function dark_addon.environment.virtual.resolvers.solo()
+  return 'player'
+end
+
+function dark_addon.environment.virtual.targets.tank()
+  local members = GetNumGroupMembers()
+  local group_type = GroupType()
+  if dark_addon.environment.virtual.resolvers[group_type..'_tank'] then
+    return dark_addon.environment.virtual.resolvers[group_type..'_tank'](members)
+  end
+end
+
+function dark_addon.environment.virtual.resolvers.party_tank(members)
+  local tank = 'player'
+  for i = 1, (members - 1) do
+    local unit = 'party' .. i
+    if UnitHealthMax(unit) > UnitHealthMax(tank) then
+      tank = unit
+    end
+  end
+  return tank
+end
+
+function dark_addon.environment.virtual.resolvers.raid_tank(members)
+  local tank = 'player'
+  for i = 1, (members - 1) do
+    local unit = 'raid' .. i
+    if UnitHealthMax(unit) > UnitHealthMax(tank) then
+      tank = unit
+    end
+  end
+  return tank
+end
+
+function dark_addon.environment.virtual.resolvers.solo_tank()
   return 'player'
 end
 

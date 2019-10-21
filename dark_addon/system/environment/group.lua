@@ -7,7 +7,7 @@ local group = { }
 local function group_count(func)
   local count = 0
   for unit in dark_addon.environment.iterator() do
-    if func(unit) then 
+    if func(unit) then
       count = count + 1
     end
   end
@@ -20,7 +20,7 @@ end
 
 local function group_match(func)
   for unit in dark_addon.environment.iterator() do
-    if func(unit) then 
+    if func(unit) then
       return unit
     end
   end
@@ -84,7 +84,7 @@ local function group_under(...)
         or not distance
       )
       and (
-        (effective and unit.health.effective < percent) 
+        (effective and unit.health.effective < percent)
         or (not effective and unit.health.percent < percent)
       )
   end)
