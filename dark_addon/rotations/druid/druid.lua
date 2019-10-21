@@ -13,24 +13,26 @@ end
 setfenv(buffs, dark_addon.environment.env)
 
 local function heal()--HealingTouch Regrowth Rejuvenation
-  local HealingTouchpct = 80
+  local HealingTouchpct = 50
   local Regrowthpct = 70
-  local Rejuvpct = 60
+  local Rejuvpct = 80
   if lowest.health.percent <= HealingTouchpct then
-    if castable(SB.HealingTouch[1]) then
-      cast(SB.HealingTouch[1],'player')
+    if castable(SB.HealingTouch) then
+      cast(SB.HealingTouch,'player')
       return true
     end
   end
   if lowest.health.percent <= Regrowthpct then
     if castable(SB.Regrowth) and lowest.buff(SB.Regrowth).down then
       cast(SB.Regrowth,'player')
+      dark_addon.console.debug(1, 'engine', 'engine', string.format('UnitHealth of %s is now %d', UnitName('player'), lowest.health.percent))
       return true
     end
   end
   if lowest.health.percent <= Rejuvpct then
     if castable(SB.Rejuvenation) and lowest.buff(SB.Rejuvenation).down then
       cast(SB.Rejuvenation,'player')
+      dark_addon.console.debug(1, 'engine', 'engine', string.format('UnitHealth of %s is now %d', UnitName('player'), lowest.health.percent))
       return true
     end
   end

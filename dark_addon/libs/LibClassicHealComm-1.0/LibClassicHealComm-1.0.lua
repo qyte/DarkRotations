@@ -2030,6 +2030,7 @@ function HealComm:OnInitialize()
 
 	-- Load all of the classes formulas and such
 	LoadClassData()
+	HealComm.CalculateHealing = CalculateHealing
 	
 	clearGUIDData()
 	

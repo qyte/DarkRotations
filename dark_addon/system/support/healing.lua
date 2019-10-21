@@ -7,7 +7,8 @@ function heals:avg()
     return math.floor((self.min + self.max)/2)
 end
 function heals:heal()
-    return math.floor(self.avg + (self.coef * bonus))
+    return select(2,dark_addon.Healcomm.CalculateHealing(nil,self.id))
+    --return math.floor(self.avg + (self.coef * bonus))
 end
 function heals:hpm()
     return math.floor(self.heal / GetSpellPowerCost(self.id)[1].cost)
@@ -173,7 +174,6 @@ local function decreasePlayerIncoming(self, value)
 end
 
 local playerGUID = nil
-local healunit = dark_addon.savedHealTarget
 
 dark_addon.UnitHealth = {}
 setmetatable(dark_addon.UnitHealth,{
@@ -245,7 +245,7 @@ end)
     dark_addon.UnitHealth(unit)
 end)]]
 
-dark_addon.Healcomm.RegisterCallback(addon,'HealComm_HealStopped',function(event, casterGUID, spellID, bitType, interrupted,...)
+dark_addon.Healcomm.RegisterCallback(dark_addon.name,'HealComm_HealStopped',function(event, casterGUID, spellID, bitType, interrupted,...)
     if casterGUID ~= playerGUID then return end
     if bitType ~= DIRECT_HEALS then return end
     if interrupted then return end
@@ -259,10 +259,9 @@ dark_addon.Healcomm.RegisterCallback(addon,'HealComm_HealStopped',function(event
         if unit then
             local health = dark_addon.UnitHealth(unit)
             health.playerInc = HealingSpells[spellID].heal
-            dark_addon.console.debug(1, 'engine', 'engine', string.format('UnitHealth of %s is now %d', unit, health.actual))
+            dark_addon.console.debug(1, 'engine', 'engine', string.format('UnitHealth update of %s is now %d', unit, health.actual * 100 / UnitHealthMax(unit)))
             C_Timer.After(lag, function()
                 decreasePlayerIncoming(health, HealingSpells[spellID].heal)
-                dark_addon.console.debug(1, 'engine', 'engine', string.format('UnitHealth of %s is now %d', unit, health.actual))
             end)
         end
     end
