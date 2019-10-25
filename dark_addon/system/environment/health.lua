@@ -2,17 +2,22 @@ local addon, dark_addon = ...
 
 local health = { }
 local UnitHealth = dark_addon.environment.UnitHealth
+local UnitGetIncomingHeals = dark_addon.environment.UnitGetIncomingHeals
 
 function health:percent()
-  return UnitHealth(self.unitID) / UnitHealthMax(self.unitID) * 100
+  return self.actual / self.max * 100
 end
 
 function health:actual()
   return UnitHealth(self.unitID)
 end
 
+function health:max()
+  return UnitHealthMax(self.unitID)
+end
+
 function health:effective()
-  return (UnitHealth(self.unitID) + (UnitGetIncomingHeals(self.unitID) or 0)) / UnitHealthMax(self.unitID) * 100
+  return (self.actual + self.incoming) / self.max * 100
 end
 
 function health:incoming()
@@ -20,7 +25,7 @@ function health:incoming()
 end
 
 function health:missing()
-  return UnitHealthMax(self.unitID) - UnitHealth(self.unitID)
+  return self.max - self.actual
 end
 
 function dark_addon.environment.conditions.health(unit, called)

@@ -7,16 +7,17 @@
 ## Version: 1.0.0
 
 libs\LibStub-1.0\LibStub.lua
-libs\CallbackHandler-1.0\CallbackHandler-1.0.xml
+libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
 libs\LibSharedMedia-3.0\LibSharedMedia-3.0.lua
 libs\LibRangeCheck-2.0\LibRangeCheck-2.0.lua
+libs\LibClassicHealComm-1.0\lib.xml
 libs\DiesalTools-1.0\DiesalTools-1.0.lua
 libs\DiesalStyle-1.0\DiesalStyle-1.0.lua
 libs\DiesalGUI-1.0\DiesalGUI-1.0.xml
 libs\DiesalMenu-1.0\DiesalMenu-1.0.xml
 libs\LibDispellable-1.0-bfa\LibDispellable-1.0.lua
 libs\LibClassicCasterino\LibClassicCasterino.lua
-
+libs\LibClassicDurations\LibClassicDurations.xml
 
 
 

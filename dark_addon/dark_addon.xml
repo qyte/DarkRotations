@@ -9,6 +9,7 @@
   <Script file="system\support\event.lua" />
   <Script file="system\support\storage.lua" />
   <Script file="system\support\commands.lua" />
+  <Script file="system\support\healing.lua" />
   <Script file="system\support\data\data.lua" />
   <Script file="system\support\data\removables.lua" />
   <Script file="system\interface\window.lua" />

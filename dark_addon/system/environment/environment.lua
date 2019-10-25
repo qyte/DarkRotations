@@ -11,18 +11,15 @@ dark_addon.environment = {
 local env = { }
 
 local function UnitHealth(unit)
-  -- if the unit is on cooldown then its health hasn't been updated yet so..
-  -- lowest shouldn't be selecting it. and. the health checking in a CR
-  -- shouldn't see the stale health value. so report MaxHealth instead.
-  if dark_addon.healthCooldown[unit] ~= nil then
-    if dark_addon.healthCooldown[unit] > GetTime() then
-      dark_addon.console.debug(1, 'engine', 'engine', string.format('unit %s (health/max %s/%s) is on cooldown', UnitName(unit), _G.UnitHealth(unit), UnitHealthMax(unit)))
-      return UnitHealthMax(unit)
-    end
-  end
-  return _G.UnitHealth(unit)
+  return dark_addon.UnitHealth(unit).actual
 end
 dark_addon.environment.UnitHealth = UnitHealth
+
+local function UnitGetIncomingHeals(unit)
+  return dark_addon.UnitHealth(unit).incoming
+end
+
+dark_addon.environment.UnitGetIncomingHeals = UnitGetIncomingHeals
 
 local GetSpellName = function(spellid)
   local rank = GetSpellSubtext(spellid)
@@ -109,9 +106,9 @@ dark_addon.environment.hooks.each_member = dark_addon.environment.iterator
 dark_addon.environment.unit_buff = function(target, spell, owner)
   local buff, count, caster, expires, spellID
   local i = 0; local go = true
-  while i <= 40 and go do
+  while i <= 100 and go do
     i = i + 1
-    buff, _, count, _, duration, expires, caster, stealable, _, spellID = _G['UnitBuff'](target, i)
+    buff, _, count, _, duration, expires, caster, stealable, _, spellID = dark_addon.libCD:UnitAura(target,i,"HELPFUL") -- _G['UnitBuff'](target, i)
     if not owner then
       if ((tonumber(spell) and spellID == tonumber(spell)) or buff == spell) and caster == "player" then go = false end
     elseif owner == "any" then
@@ -124,9 +121,9 @@ end
 dark_addon.environment.unit_debuff = function(target, spell, owner)
   local debuff, count, caster, expires, spellID
   local i = 0; local go = true
-  while i <= 40 and go do
+  while i <= 100 and go do
     i = i + 1
-    debuff, _, count, _, duration, expires, caster, _, _, spellID = _G['UnitDebuff'](target, i)
+    debuff, _, count, _, duration, expires, caster, _, _, spellID = dark_addon.libCD:UnitAura(target,i,"HARMFUL") --_G['UnitDebuff'](target, i)
     if not owner then
       if ((tonumber(spell) and spellID == tonumber(spell)) or debuff == spell) and caster == "player" then go = false end
     elseif owner == "any" then
@@ -139,9 +136,9 @@ end
 dark_addon.environment.unit_reverse_debuff = function(target, candidates)
   local debuff, count, caster, expires, spellID
   local i = 0; local go = true
-  while i <= 40 and go do
+  while i <= 100 and go do
     i = i + 1
-    debuff, _, count, _, duration, expires, caster, _, _, spellID = _G['UnitDebuff'](target, i)
+    debuff, _, count, _, duration, expires, caster, _, _, spellID = dark_addon.libCD:UnitAura(target,i,"HARMFUL") --_G['UnitDebuff'](target, i)
     if candidates[spellID] then go = false end
   end
   return debuff, count, duration, expires, caster, candidates[spellID]

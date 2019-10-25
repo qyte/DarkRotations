@@ -80,22 +80,6 @@ function dark_addon.rotation.tick(ticker)
         return
       end
     end
-
-    local iscasting, _ = CastingInfo("player")
-    local hcd = dark_addon.settings.fetch('_engine_healcd.spin', 0.8)
-    if dark_addon.savedHealTarget ~= nil and not iscasting then
-      dark_addon.healthCooldown[dark_addon.savedHealTarget] = GetTime() + hcd
-      dark_addon.console.debug(1, 'engine', 'engine', string.format('finished casting spell on %s. Health %d start cooldown of %1.1f seconds', UnitName(dark_addon.savedHealTarget), UnitHealth(dark_addon.savedHealTarget), hcd))
-      dark_addon.savedHealTarget = nil
-    end
-    local unit, cdtime
-    for unit, cdtime in pairs(dark_addon.healthCooldown) do
-      if GetTime() > cdtime then
-        dark_addon.console.debug(1, 'engine', 'engine', string.format('cooldown finished for unit %s health %d', UnitName(unit), UnitHealth(unit)))
-        dark_addon.healthCooldown[unit] = nil
-      end
-    end
-
     if UnitAffectingCombat('player') then
       dark_addon.rotation.active_rotation.combat()
     else

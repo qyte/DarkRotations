@@ -1,0 +1,3 @@
+[submodule "dark_addon/rotations"]
+	path = dark_addon/rotations
+	url = https://github.com/qyte/ClassicRotations

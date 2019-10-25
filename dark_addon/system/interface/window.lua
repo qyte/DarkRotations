@@ -1151,7 +1151,7 @@ dark_addon.on_ready(function()
       { key = 'turbo', type = 'checkbox', text = 'Enable Turbo', desc = 'Enables higher performance.', default = false },
       { key = 'castclip', type = 'spinner', text = 'Clip Amount', desc = 'The amount of time, in seconds, before attempting the next cast during the GCD.  Default is 0.15', min = 0.00, max = 1.00, step = 0.01, default = 0.15 },
       { type = 'rule' },
-      { key = 'healcd', type = 'checkspin', text = 'Healing Cooldown (s)', default_check = true, default_spin = 0.8, min = 0.00, max = 3.00, step = 0.1 },
+      { key = 'healcd', type = 'checkspin', text = 'Healing Cooldown (s)', default_check = true, default_spin = 0.1, min = 0.00, max = 3.00, step = 0.1 },
     }
   }
   configWindow = builder.buildGUI(engine)
