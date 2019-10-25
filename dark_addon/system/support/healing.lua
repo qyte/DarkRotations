@@ -274,7 +274,10 @@ dark_addon.Healcomm.RegisterCallback(dark_addon.name,'HealComm_HealStopped',func
     if not bitType == DIRECT_HEALS then return end
     if not HealingSpells[spellID] then return end
     cancelTicks()
-    if interrupted then return end
+    if interrupted then
+        cleartable(dark_addon.UnitHealth)
+        return
+    end
     if not dark_addon.settings.fetch('_engine_healcd.check', true) then return end
     local lag = select(4, GetNetStats()) / 1000
     local healcd = dark_addon.settings.fetch('_engine_healcd.spin', 0.1)
