@@ -243,7 +243,9 @@ local function cancelTicks()
 end
 
 local function updateHealth(endTime,unitGUIDS)
-    if endTime - GetTime() > dark_addon.settings.fetch('_engine_castclip', 0.15) + 0.01 then return end
+    local clip = dark_addon.settings.fetch('_engine_turbo', false) and dark_addon.settings.fetch('_engine_castclip', 0.15) or 0.01
+    if endTime - GetTime() > clip + 0.01 then return end
+    dark_addon.console.debug(1,'engine','engine',string.format("clip = %f",clip))
     cancelTicks()
     for _,guid in pairs(unitGUIDS) do
         local unit = dark_addon.Healcomm.guidToUnit[guid]
@@ -259,6 +261,7 @@ local function startheal(event, casterGUID, spellID, bitType, endTime, ...)
     if not bitType == DIRECT_HEALS then return end
     if not HealingSpells[spellID] then return end
     cancelTicks()
+    cleartable(dark_addon.UnitHealth)
     local tempGUIDS = {}
     for i=1, select("#", ...) do
         table.insert(tempGUIDS,select(i, ...))
