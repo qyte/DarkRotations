@@ -227,27 +227,62 @@ local function cleartable(t)
 end
 
 dark_addon.event.register("PLAYER_ENTERING_WORLD", function()
-    playerGUID = UnitGUID('player')
     cleartable(dark_addon.UnitHealth)
 end)
+dark_addon.event.register("PLAYER_LOGIN", function()
+    playerGUID = UnitGUID('player')
+end)
+
+local ticker
+
+local function cancelTicks()
+    if ticker then
+        ticker:Cancel()
+        ticker = nil
+    end
+end
+
+local function updateHealth(endTime,unitGUIDS)
+    if endTime - GetTime() > dark_addon.settings.fetch('_engine_castclip', 0.15) + 0.01 then return end
+    cancelTicks()
+    for _,guid in pairs(unitGUIDS) do
+        local unit = dark_addon.Healcomm.guidToUnit[guid]
+        if unit then
+            local health = dark_addon.UnitHealth(unit)
+            health.playerInc = dark_addon.Healcomm:GetHealAmount(guid,DIRECT_HEALS,nil,playerGUID) or 0
+        end
+    end
+end
+
+local function startheal(event, casterGUID, spellID, bitType, endTime, ...)
+    if not casterGUID == playerGUID then return end
+    if not bitType == DIRECT_HEALS then return end
+    if not HealingSpells[spellID] then return end
+    cancelTicks()
+    local tempGUIDS = {}
+    for i=1, select("#", ...) do
+        table.insert(tempGUIDS,select(i, ...))
+    end
+    ticker = C_Timer.NewTicker(0.01,function() updateHealth(endTime * 1000,tempGUIDS) end)
+end
+
+dark_addon.Healcomm.RegisterCallback(dark_addon.name,'HealComm_HealStarted',startheal)
+dark_addon.Healcomm.RegisterCallback(dark_addon.name,'HealComm_HealUpdated',startheal)
 
 dark_addon.Healcomm.RegisterCallback(dark_addon.name,'HealComm_HealStopped',function(event, casterGUID, spellID, bitType, interrupted,...)
     if not casterGUID == playerGUID then return end
     if not bitType == DIRECT_HEALS then return end
-    if interrupted then return end
     if not HealingSpells[spellID] then return end
+    cancelTicks()
+    if interrupted then return end
     if not dark_addon.settings.fetch('_engine_healcd.check', true) then return end
-    bonus = GetSpellBonusHealing()
     local lag = select(4, GetNetStats()) / 1000
-    --local castclip = dark_addon.settings.fetch('_engine_castclip', 0.15)
-    local ticker = dark_addon.settings.fetch('_engine_healcd.spin', 0.1)
-    lag = lag + ticker --+ castclip
+    local healcd = dark_addon.settings.fetch('_engine_healcd.spin', 0.1)
+    lag = lag + healcd
     for i=1, select("#", ...) do
         local unit = dark_addon.Healcomm.guidToUnit[select(i, ...)]
         if unit then
             local health = dark_addon.UnitHealth(unit)
-            health.playerInc = HealingSpells[spellID].heal
-            --dark_addon.console.debug(1, 'engine', 'engine', string.format('UnitHealth update of %s is now %d', unit, health.actual * 100 / UnitHealthMax(unit)))
             C_Timer.After(lag, function()
                 health.playerInc = 0
             end)

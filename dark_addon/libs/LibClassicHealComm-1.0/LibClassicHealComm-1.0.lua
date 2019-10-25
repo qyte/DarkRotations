@@ -1,13 +1,13 @@
 --[[
 Name: LibClassicHealComm-1.0
-Revision: $Revision: 22 $
+Revision: $Revision: 23 $
 Author(s): Aviana, Original by Shadowed (shadowed.wow@gmail.com)
 Description: Healing communication library. This is a heavily modified clone of LibHealComm-4.0.
 Dependencies: LibStub, ChatThrottleLib
 ]]
 
 local major = "LibClassicHealComm-1.0"
-local minor = 22
+local minor = 23
 assert(LibStub, string.format("%s requires LibStub.", major))
 
 local HealComm = LibStub:NewLibrary(major, minor)
@@ -449,7 +449,7 @@ function HealComm:GetHealAmount(guid, bitFlag, time, casterGUID)
 end
 
 -- Gets healing amounts for everyone except the player using the passed filters
-function HealComm:GetOthersHealAmount(guid, bitFlag, time)
+function HealComm:GetOthersHealAmount(guid)
 	local amount = 0
 	for casterGUID, spells in pairs(pendingHeals) do
 		if( casterGUID ~= playerGUID ) then
@@ -465,11 +465,10 @@ function HealComm:GetOthersHealAmount(guid, bitFlag, time)
 	return amount > 0 and amount or nil
 end
 
-function HealComm:GetCasterHealAmount(guid, bitFlag, time)
-	return self:GetHealAmount(guid, bitFlag, time, playerGUID)
-	--[[local amount = pendingHeals[guid] and filterData(pendingHeals[guid], nil, bitFlag, time, true) or 0
+function HealComm:GetCasterHealAmount(guid)
+	local amount = pendingHeals[guid] and filterData(pendingHeals[guid], nil, bitFlag, time, true) or 0
 	amount = amount + (pendingHots[guid] and filterData(pendingHots[guid], nil, bitFlag, time, true) or 0)
-	return amount > 0 and amount or nil]]
+	return amount > 0 and amount or nil
 end
 
 -- Healing class data
@@ -1481,7 +1480,7 @@ function HealComm:CHAT_MSG_ADDON(prefix, message, channel, sender)
 	if( not commType or not spellID or not casterGUID ) then return end
 	
 	-- New direct heal - D:<castTime>:<spellID>:<amount>:target1,target2...
-	if( commType == "D" and arg1 and arg2 ) then
+	if( commType == "D" and arg1 and arg2 and castTime ) then
 		parseDirectHeal(casterGUID, spellID, tonumber(arg1), castTime, string.split(",", arg2))
 	-- Direct or channel heal delayed - DL:<extra>:<spellID>:<start>:<end>...
 	elseif( commType == "DL" and arg1 and arg2 ) then
@@ -1490,7 +1489,7 @@ function HealComm:CHAT_MSG_ADDON(prefix, message, channel, sender)
 	elseif( commType == "C" and arg1 and arg3 ) then
 		parseChannelHeal(casterGUID, spellID, tonumber(arg1), tonumber(arg2), string.split(",", arg3))
 	-- New hot - H:<extra>:<spellID>:<amount>:<duration>:target1,target2...
-	elseif( commType == "H" and arg1 and arg2 ) then
+	elseif( commType == "H" and arg1 and arg2 and arg3) then
 		parseHotHeal(casterGUID, false, spellID, tonumber(arg1), tonumber(arg2), string.split(",", arg3))
 	-- Heal stopped - S:<extra>:<spellID>:<ended early: 0/1>:target1,target2...
 	elseif( commType == "S" or commType == "HS" ) then
@@ -2030,8 +2029,6 @@ function HealComm:OnInitialize()
 
 	-- Load all of the classes formulas and such
 	LoadClassData()
-	HealComm.CalculateHealing = CalculateHealing	
-	HealComm.CalculateHotHealing = CalculateHotHealing
 	
 	clearGUIDData()
 	
