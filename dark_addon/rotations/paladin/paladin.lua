@@ -158,8 +158,8 @@ local function FindHolyLightRank(unit)
         toHeal = HolyLightMax[rank] + GetSpellBonusHealing() * HolyLightCoef[rank]
         if rank < #HolyLightMax then checker = IsSpellKnown(SB.HolyLight[rank + 1]) and not select(2, IsUsableSpell(SB.HolyLight[rank + 1])) end
     end
-    toHeal = HolyLightMax[rank] + GetSpellBonusHealing() * HolyLightCoef[rank]
-    if rank > 1 and unit.health.missing < toHeal * 0.8 then rank = rank - 1 end
+    --toHeal = HolyLightMax[rank] + GetSpellBonusHealing() * HolyLightCoef[rank]
+    --if rank > 1 and unit.health.missing < toHeal * 0.8 then rank = rank - 1 end
     return rank, HolyLightMax[rank]
 end
 setfenv(FindHolyLightRank, dark_addon.environment.env)
@@ -175,8 +175,8 @@ local function FindFlashOfLightRank(unit)
         toHeal = FlashOfLightMax[rank] + GetSpellBonusHealing() * FlashLightCoef[rank]
         if rank < #FlashOfLightMax then checker = IsSpellKnown(SB.FlashOfLight[rank + 1]) and not select(2, IsUsableSpell(SB.FlashOfLight[rank + 1])) end
     end
-    toHeal = FlashOfLightMax[rank] + GetSpellBonusHealing() * FlashLightCoef[rank]
-    if rank > 1 and unit.health.missing < toHeal * 0.8 then rank = rank - 1 end
+    --toHeal = FlashOfLightMax[rank] + GetSpellBonusHealing() * FlashLightCoef[rank]
+    --if rank > 1 and unit.health.missing < toHeal * 0.8 then rank = rank - 1 end
     return rank, FlashOfLightMax[rank]
 end
 setfenv(FindFlashOfLightRank, dark_addon.environment.env)

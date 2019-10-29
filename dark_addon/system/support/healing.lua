@@ -243,9 +243,8 @@ local function cancelTicks()
 end
 
 local function updateHealth(endTime,unitGUIDS)
-    local clip = dark_addon.settings.fetch('_engine_turbo', false) and dark_addon.settings.fetch('_engine_castclip', 0.15) or 0.01
-    if endTime - GetTime() > clip + 0.01 then return end
-    dark_addon.console.debug(1,'engine','engine',string.format("clip = %f",clip))
+    local clip = dark_addon.settings.fetch('_engine_turbo', false) and dark_addon.settings.fetch('_engine_castclip', 0.15) or 0
+    if endTime - GetTime() > clip + 0.1 then return end
     cancelTicks()
     for _,guid in pairs(unitGUIDS) do
         local unit = dark_addon.Healcomm.guidToUnit[guid]
@@ -257,9 +256,10 @@ local function updateHealth(endTime,unitGUIDS)
 end
 
 local function startheal(event, casterGUID, spellID, bitType, endTime, ...)
-    if not casterGUID == playerGUID then return end
-    if not bitType == DIRECT_HEALS then return end
+    if casterGUID ~= playerGUID then return end
+    if bitType ~= DIRECT_HEALS then return end
     if not HealingSpells[spellID] then return end
+    --dark_addon.console.debug(1,'engine','engine',string.format("spell=%s ,type = %d",GetSpellInfo(spellID),bitType))
     cancelTicks()
     cleartable(dark_addon.UnitHealth)
     local tempGUIDS = {}
@@ -273,8 +273,8 @@ dark_addon.Healcomm.RegisterCallback(dark_addon.name,'HealComm_HealStarted',star
 dark_addon.Healcomm.RegisterCallback(dark_addon.name,'HealComm_HealUpdated',startheal)
 
 dark_addon.Healcomm.RegisterCallback(dark_addon.name,'HealComm_HealStopped',function(event, casterGUID, spellID, bitType, interrupted,...)
-    if not casterGUID == playerGUID then return end
-    if not bitType == DIRECT_HEALS then return end
+    if casterGUID ~= playerGUID then return end
+    if bitType ~= DIRECT_HEALS then return end
     if not HealingSpells[spellID] then return end
     cancelTicks()
     if interrupted or not dark_addon.settings.fetch('_engine_healcd.check', true) then

@@ -1,5 +1,20 @@
 local addon, dark_addon = ...
 
+local errorsfr = CreateFrame("Frame")
+errorsfr:SetScript("OnEvent",function(_,_,err,msg)
+  if UnitAffectingCombat('player') then return end
+  if strfind(msg,'shapeshift') then
+    _RunMacroText('/cancelform')
+  end
+  if strfind(msg,'standing to do') then
+    _RunMacroText('/stand')
+  end
+  --print('ErrorCode: '..err)
+  --print('ErrorMsg: '..msg)
+end)
+
+errorsfr:RegisterEvent("UI_ERROR_MESSAGE")
+
 local caster
 local bear
 local aquatic
@@ -8,6 +23,11 @@ local travel
 local FormMana
 local SuperHealCost
 local HealCost
+local Powershift
+local FullPowershift
+local immune
+local combo
+local hasFuror
 
 local function interrupt()
 
@@ -30,14 +50,12 @@ local function buffs()
 
   if player.buff('Mark of the Wild').down and player.power.mana.percent > 40 then
     macro("/cancelform")
-    macro("/stand")
     cast('Mark of the Wild', 'player')
     return true
   end
 
   if player.buff('Thorns').down and player.power.mana.percent > 40 then
     macro("/cancelform")
-    macro("/stand")
     cast('Thorns', 'player')
     return true
   end
@@ -46,11 +64,15 @@ local function buffs()
 end
 setfenv(buffs, dark_addon.environment.env)
 
+local function selfHeal()
+end
+setfenv(selfHeal, dark_addon.environment.env)
+
 local function tiger()
 
   if not toggle('cat', false) or toggle('tank', false) or toggle('balance', false) then return false end
 
-  local Faer = GetSpellPowerCost('Faerie Fire')[1].cost + GetSpellPowerCost('Bear Form')[1].cost
+  local Faer = GetSpellPowerCost(SB.FaerieFire.id)[1].cost + GetSpellPowerCost('Bear Form')[1].cost
 
   if player.health.percent < 20 and FormMana < HealCost and FormMana > GetSpellPowerCost('Bear Form')[1].cost and
     GetItemCount(929) >= 1 then
@@ -66,13 +88,13 @@ local function tiger()
   end
   
   if modifier.control and player.buff('Regrowth').down and not
-    player.moving and not spell('Regrowth').lastcast and FormMana > SuperHealCost then
+    player.moving and FormMana > SuperHealCost then
     macro("/cancelform")
     cast('Regrowth', 'player')
     return true
   end
 
-  if caster and player.buff('Rejuvenation').down and castable('Rejuvenation') and spell('Regrowth').lastcast then
+  if caster and player.buff('Rejuvenation').down and castable('Rejuvenation') then
     cast('Rejuvenation', 'player')
     return true
   end
@@ -102,6 +124,20 @@ local function tiger()
     return true
   end
 
+  if dark_addon.settings.fetch('druid_powershift.check', false) then
+    if Powershift and hasFuror and UnitPower("player", 3) < 19 then
+      macro("/cancelform")
+      cast(SB.CatForm)
+    end
+  end
+
+  if dark_addon.settings.fetch('druid_fullpowershift.check', false) then
+    if FullPowershift and hasFuror and UnitPower("player", 3) < 19 then
+      macro("/cancelform")
+      cast(SB.CatForm)
+    end
+  end
+
   if castable('Faerie Fire Feral') and target.debuff('Faerie Fire Feral').down and
       IsSpellInRange('Faerie Fire Feral', 'target') == 1 then
       cast('Faerie Fire Feral', 'target')
@@ -115,11 +151,21 @@ local function tiger()
     return true
   end
 
-  if cat and castable('Ferocious Bite') and player.power.combopoints.actual >= 4 then
+  if cat and castable('Ferocious Bite') and combo >= 4 then
     cast('Ferocious Bite', 'target')
     return true
   end
 
+  if cat and castable('Rip') and not IsSpellKnown(22568) and combo >= 4 and not immune and target.health.percent > 50 then
+    cast('Rip', 'target')
+    return true
+  end
+
+  if cat and castable('Rake') and not immune and target.health.percent > 70 and target.debuff('Rake').down then
+    cast('Rake', 'target')
+    return true
+  end
+  
   if cat and not modifier.control and castable('Claw') then
     cast('Claw', 'target')
     return true
@@ -285,42 +331,42 @@ local function heal()
     if lowest.health.percent <= dark_addon.settings.fetch('druid_swiftness.spin', 25) and
     castable(SB.NaturesSwiftness) then
       macro("/cast Nature's Swiftness")
-      cast('Healing Touch', 'lowest')
+      cast('Healing Touch', lowest)
     end
   end
 
   if dark_addon.settings.fetch('druid_regrowth.check', false) then
     if lowest.health.percent <= dark_addon.settings.fetch('druid_regrowth.spin', 35) and
     castable('Regrowth') then
-      cast('Regrowth', 'lowest')
+      cast('Regrowth', lowest)
     end
   end
 
   if dark_addon.settings.fetch('druid_regrowthbuff.check', false) then
     if lowest.health.percent <= dark_addon.settings.fetch('druid_regrowthbuff.spin', 50) and
     castable('Regrowth') and lowest.buff('Regrowth').down then
-      cast('Regrowth', 'lowest')
+      cast('Regrowth', lowest)
     end
   end
 
   if dark_addon.settings.fetch('druid_healtouchmax.check', false) then
     if lowest.health.percent <= dark_addon.settings.fetch('druid_healtouchmax.spin', 50) and
     castable('Healing Touch') then
-      cast('Healing Touch', 'lowest')
+      cast('Healing Touch', lowest)
     end
   end
 
   if dark_addon.settings.fetch('druid_healtouch4.check', false) then
     if lowest.health.percent <= dark_addon.settings.fetch('druid_healtouch4.spin', 80) and
-    castable('Healing Touch[Rank4]') then
-      cast('Healing Touch[Rank4]', 'lowest')
+    castable('Healing Touch(Rank 4)') then
+      cast('Healing Touch(Rank 4)', lowest)
     end
   end
 
   if dark_addon.settings.fetch('druid_rejuva.check', false) then
     if lowest.health.percent <= dark_addon.settings.fetch('druid_rejuva.spin', 85) and
     castable('Rejuvenation') and lowest.buff('Rejuvenation').down then
-      cast('Rejuvenation', 'lowest')
+      cast('Rejuvenation', lowest)
     end
   end
 
@@ -359,8 +405,8 @@ local function heal()
 
   if dark_addon.settings.fetch('druid_healtouch4.check', false) then
     if target.health.percent <= dark_addon.settings.fetch('druid_healtouch4.spin', 80) and
-    castable('Healing Touch[Rank4]') then
-      cast('Healing Touch[Rank4]', 'target')
+    castable('Healing Touch(Rank 4)') then
+      cast('Healing Touch(Rank 4)', 'target')
     end
   end
 
@@ -386,6 +432,11 @@ local function combat()
   FormMana = UnitPower("player", 0)
   SuperHealCost = GetSpellPowerCost('Cat Form')[1].cost + GetSpellPowerCost('Regrowth')[1].cost + GetSpellPowerCost('Rejuvenation')[1].cost
   HealCost = GetSpellPowerCost('Cat Form')[1].cost + GetSpellPowerCost('Healing Touch')[1].cost
+  Powershift = GetSpellPowerCost('Cat Form')[1].cost + GetSpellPowerCost('Regrowth')[1].cost + GetSpellPowerCost('Rejuvenation')[1].cost + GetSpellPowerCost('Cat Form')[1].cost
+  FullPowershift = GetSpellPowerCost('Cat Form')[1].cost
+  immune = UnitCreatureType("target") == "Mechanical" or UnitCreatureType("target") == "Elemental" or UnitCreatureType("target") == "Undead"
+  hasFuror = select(4,GetTalentInfo(3,2)) == 5
+  combo = player.power.combopoints.actual
 
   if not player.alive or player.buff('Bandage').exists or player.channeling() or player.casting then return end
   if travel or aquatic then return end
@@ -421,11 +472,22 @@ local function interface()
           template = {
               { type = 'header', text = 'druid Settings', align= 'center'}, 
               { type = 'rule'}, 
-          {   key = 'AutoBuff', type = 'checkbox',
+              {key = 'AutoBuff', type = 'checkbox',
               text = 'Auto Buff',
               desc = '',
               default = false
-          }, {type = 'text', text = ' Buffs '},  
+            }, {type = 'text', text = ' Shapeshifting '}, 
+            {key = 'powershift', type = 'checkbox',
+              text = 'Powershift',
+              desc = 'Will powershift to take advantage of Furor talent. Will save mana for heal if needed. Best option for solo',
+              default = false
+            },
+            {key = 'fullpowershift', type = 'checkbox',
+              text = 'Full Powershift',
+              desc = 'Will powershift to take advantage of Furor talent. Will not save mana for heal. Best option for groups',
+              default = false
+            },
+            { type = 'rule'}, 
            { type = 'header', text = 'Heal Settings', align= 'center'}, 
             { type = 'rule'}, {
             key = "healtouch4",
