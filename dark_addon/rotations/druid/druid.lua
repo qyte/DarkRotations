@@ -1,7 +1,6 @@
 local addon, dark_addon = ...
 
-local errorsfr = CreateFrame("Frame")
-errorsfr:SetScript("OnEvent",function(_,_,err,msg)
+dark_addon.event.register("UI_ERROR_MESSAGE", function(_,msg)
   if UnitAffectingCombat('player') then return end
   if strfind(msg,'shapeshift') then
     _RunMacroText('/cancelform')
@@ -9,11 +8,11 @@ errorsfr:SetScript("OnEvent",function(_,_,err,msg)
   if strfind(msg,'standing to do') then
     _RunMacroText('/stand')
   end
-  --print('ErrorCode: '..err)
-  --print('ErrorMsg: '..msg)
 end)
-
-errorsfr:RegisterEvent("UI_ERROR_MESSAGE")
+local lastOOC = GetTime()
+dark_addon.event.register("PLAYER_REGEN_ENABLED", function()
+  lastOOC = GetTime()
+end)
 
 local caster
 local bear
@@ -435,7 +434,7 @@ local function combat()
   Powershift = GetSpellPowerCost('Cat Form')[1].cost + GetSpellPowerCost('Regrowth')[1].cost + GetSpellPowerCost('Rejuvenation')[1].cost + GetSpellPowerCost('Cat Form')[1].cost
   FullPowershift = GetSpellPowerCost('Cat Form')[1].cost
   immune = UnitCreatureType("target") == "Mechanical" or UnitCreatureType("target") == "Elemental" or UnitCreatureType("target") == "Undead"
-  hasFuror = select(4,GetTalentInfo(3,2)) == 5
+  hasFuror = select(5,GetTalentInfo(3,2)) == 5
   combo = player.power.combopoints.actual
 
   if not player.alive or player.buff('Bandage').exists or player.channeling() or player.casting then return end
@@ -454,9 +453,20 @@ local function resting()
   if not player.alive or player.buff('Food').exists or player.buff('Drink').exists or
     player.buff('Bandage').exists or player.channeling() or player.casting then return end
 
+  local water = IsSubmerged() or IsSwimming()
+
   if heal() then return end
   if buffs() then return end
-    -- resting
+
+  if GetTime() - lastOOC < 10 or not player.moving then return end
+  aquatic = player.buff('Aquatic Form').up
+  travel = player.buff('Travel Form').up
+  if water and not aquatic and castable('Aquatic Form') then
+    macro('/cancelform [swimming,noform:2]')
+    macro('/cast [swimming] Aquatic Form')
+    return
+  end
+  --resting
 end
 
 local function interface()
