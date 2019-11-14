@@ -150,11 +150,11 @@ local UnitHealthMax = _G.UnitHealthMax
 local UnitIsUnit = _G.UnitIsUnit
 local healths = {}
 function healths:hp()
-    if not self.unitID then return 100 end
+    if not self.unitID then return 0 end
     return UnitHealth(self.unitID)
 end
 function healths:actual()
-    if not self.unitID then return 100 end
+    if not self.unitID then return 0 end
     return self.hp + self.playerInc
 end
 function healths:effective()
@@ -164,7 +164,7 @@ end
 function healths:incoming()
     if not self.unitID then return 0 end
     if UnitCanAttack('player',self.unitID) then return 0 end
-    return dark_addon.Healcomm:GetHealAmount(self.unitGUID,ALL_HEALS) or 0
+    return dark_addon.Healcomm:GetHealAmount(self.unitGUID,DIRECT_HEALS) or 0
 end
 
 local playerGUID = nil
@@ -185,7 +185,8 @@ setmetatable(dark_addon.UnitHealth,{
             return setmetatable({
                 unitID = nil,
                 unitGUID = nil,
-                playerInc = 0
+                playerInc = 0,
+                actual = 0
               }, {
                 __index = function(t, k)
                   return healths[k](t)

@@ -13,7 +13,7 @@ dark_addon.protected = false
 dark_addon.adv_protected = false
 dark_addon.libcc = LibStub("LibClassicCasterino")
 dark_addon.libCD = LibStub("LibClassicDurations")
-dark_addon.Healcomm = LibStub("LibClassicHealComm-1.0")
+dark_addon.Healcomm = LibStub("LibHealComm-4.0")
 
 function dark_addon.on_ready(callback)
   dark_addon.ready_callbacks[callback] = callback
