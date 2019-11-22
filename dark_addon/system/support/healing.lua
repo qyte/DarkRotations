@@ -186,7 +186,8 @@ setmetatable(dark_addon.UnitHealth,{
                 unitID = nil,
                 unitGUID = nil,
                 playerInc = 0,
-                actual = 0
+                actual = 0,
+                incoming = 0
               }, {
                 __index = function(t, k)
                   return healths[k](t)
@@ -235,53 +236,65 @@ dark_addon.event.register("PLAYER_LOGIN", function()
 end)
 
 local ticker
+local tainted = false
 
 local function cancelTicks()
     if ticker then
         ticker:Cancel()
-        ticker = nil
     end
 end
 
-local function updateHealth(endTime,unitGUIDS)
+local function updateHealth(endTime, unitGUIDS)
+    if ticker == nil then return end
     local clip = dark_addon.settings.fetch('_engine_turbo', false) and dark_addon.settings.fetch('_engine_castclip', 0.15) or 0
-    if endTime - GetTime() > clip + 0.1 then return end
-    cancelTicks()
+    if endTime - GetTime() > clip + 0.25 then return end
     for _,guid in pairs(unitGUIDS) do
         local unit = dark_addon.Healcomm.guidToUnit[guid]
         if unit then
             local health = dark_addon.UnitHealth(unit)
             health.playerInc = dark_addon.Healcomm:GetHealAmount(guid,DIRECT_HEALS,nil,playerGUID) or 0
+            dark_addon.console.debug(1,'engine','engine',string.format("%s health is now actual: %d fake: %d",unit,health.hp,health.actual))
+            tainted = true
         end
     end
+    cancelTicks()
 end
 
 local function startheal(event, casterGUID, spellID, bitType, endTime, ...)
-    if casterGUID ~= playerGUID then return end
+    dark_addon.console.debug(1,'engine','engine',string.format("%s is casting %s",dark_addon.Healcomm.guidToUnit[casterGUID],GetSpellInfo(spellID)))
     if bitType ~= DIRECT_HEALS then return end
+    if casterGUID ~= playerGUID then return end
     if not HealingSpells[spellID] then return end
     --dark_addon.console.debug(1,'engine','engine',string.format("spell=%s ,type = %d",GetSpellInfo(spellID),bitType))
     cancelTicks()
-    cleartable(dark_addon.UnitHealth)
-    local tempGUIDS = {}
-    for i=1, select("#", ...) do
-        table.insert(tempGUIDS,select(i, ...))
+    if tainted then
+        cleartable(dark_addon.UnitHealth)
+        tainted = false
     end
-    ticker = C_Timer.NewTicker(0.01,function() updateHealth(endTime * 1000,tempGUIDS) end)
+    local unitGUIDS = {}
+    for i=1, select("#", ...) do
+        table.insert(unitGUIDS,select(i, ...))
+    end
+    ticker = C_Timer.NewTicker(0.01,function() updateHealth(endTime, unitGUIDS) end)
 end
 
 dark_addon.Healcomm.RegisterCallback(dark_addon.name,'HealComm_HealStarted',startheal)
 dark_addon.Healcomm.RegisterCallback(dark_addon.name,'HealComm_HealUpdated',startheal)
 
 dark_addon.Healcomm.RegisterCallback(dark_addon.name,'HealComm_HealStopped',function(event, casterGUID, spellID, bitType, interrupted,...)
-    if casterGUID ~= playerGUID then return end
     if bitType ~= DIRECT_HEALS then return end
+    if casterGUID ~= playerGUID then return end
     if not HealingSpells[spellID] then return end
     cancelTicks()
     if interrupted or not dark_addon.settings.fetch('_engine_healcd.check', true) then
-        cleartable(dark_addon.UnitHealth)
+        dark_addon.console.debug(1,'engine','engine',string.format("%s spell %s was interrupted",dark_addon.Healcomm.guidToUnit[casterGUID],GetSpellInfo(spellID)))
+        if tainted then
+            cleartable(dark_addon.UnitHealth)
+            tainted = false
+        end
         return
     end
+    tainted = false
     local lag = select(4, GetNetStats()) / 1000
     local healcd = dark_addon.settings.fetch('_engine_healcd.spin', 0.1)
     lag = lag + healcd
@@ -291,6 +304,7 @@ dark_addon.Healcomm.RegisterCallback(dark_addon.name,'HealComm_HealStopped',func
             local health = dark_addon.UnitHealth(unit)
             C_Timer.After(lag, function()
                 health.playerInc = 0
+                dark_addon.console.debug(1,'engine','engine',string.format("%s health is now actual: %d fake: %d",unit,health.hp,health.actual))
             end)
         end
     end

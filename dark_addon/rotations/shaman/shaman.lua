@@ -18,6 +18,11 @@ local firetotem
 local earthtotem
 local watertotem
 local airtotem
+local searingtotem
+local stoneclaw
+local stoneclawenemies
+local nova
+local novaenemies
 
 local ManaPotionID = {2455, 3385, 6149, 18841, 13444}
 local ManaPotionName = {'Minor Mana Potion', 'Lesser Mana Potion', 'Greater Mana Potion', 'Combat Mana Potion', 'Major Mana Potion'}
@@ -65,22 +70,23 @@ local function heal()
   if not toggle('heal', false) then return false end
   
   if healingwave then
-  	if lowest.health.percent <= healingwavepercent then
+  if lowest.health.effective <= healingwavepercent then
       local rank, mag = FindHealingWaveRank(lowest)
       if rank > 0 and castable(SB.HealingWave) and not player.moving then
+          GroupHealCastTime = GetTime()
           cast(SB.HealingWave[rank], lowest.unitID)
           return true
       end
-  	end
   end
+end
 
   return false
 end
 setfenv(heal, dark_addon.environment.env)
 
-
 local dispeldelaypoison = 0
 local dispeldelaydisease = 0
+
 local function dispell()
 
   local dispellable_unit_poison = group.removable('poison')
@@ -92,8 +98,8 @@ local function dispell()
         if dispeldelaypoison == 0 then
             dispeldelaypoison = GetTime() + 1.5 + math.random()
         else
-        if dispeldelaypoison < GetTime() and castable(SB.RemoveLesserCurse) then
-            cast(SB.RemoveLesserCurse, dispellable_unit_poison)
+        if dispeldelaypoison < GetTime() and castable(SB.CurePoison) then
+            cast(SB.CurePoison, dispellable_unit_poison)
             dispeldelaypoison = 0
             return true
         end
@@ -106,8 +112,8 @@ local function dispell()
         if dispeldelaydisease == 0 then
             dispeldelaydisease = GetTime() + 1.5 + math.random()
         else
-        if dispeldelaydisease < GetTime() and castable(SB.RemoveLesserCurse) then
-            cast(SB.RemoveLesserCurse, dispellable_unit_disease)
+        if dispeldelaydisease < GetTime() and castable(SB.CureDisease) then
+            cast(SB.CureDisease, dispellable_unit_disease)
             dispeldelaydisease = 0
             return true
         end
@@ -178,54 +184,67 @@ local function useitem()
   end
 setfenv(useitem, dark_addon.environment.env)
 
-local weaponenchants = {
-    [29] = 'Rockbiter Weapon',
-    [6] = 'Rockbiter Weapon',
-    [1] = 'Rockbiter Weapon',
-    [503] = 'Rockbiter Weapon',
-    [1663] = 'Rockbiter Weapon',
-    [683] = 'Rockbiter Weapon',
-    [1664] = 'Rockbiter Weapon',
-    [5] = 'Flametongue Weapon',
-    [4] = 'Flametongue Weapon',
-    [3] = 'Flametongue Weapon',
-    [523] = 'Flametongue Weapon',
-    [1665] = 'Flametongue Weapon',
-    [1666] = 'Flametongue Weapon',
-    [2] = 'Frostbrand Weapon',
-    [12] = 'Frostbrand Weapon',
-    [524] = 'Frostbrand Weapon',
-    [1667] = 'Frostbrand Weapon',
-    [1668] = 'Frostbrand Weapon',
-    [283] = 'Windfury Weapon',
-    [284] = 'Windfury Weapon',
-    [525] = 'Windfury Weapon',
-    [1669] = 'Windfury Weapon'
-}
-
 local function buffs()
+
+    local weaponenchants = {
+      [29] = 'Rockbiter Weapon',
+      [6] = 'Rockbiter Weapon',
+      [1] = 'Rockbiter Weapon',
+      [503] = 'Rockbiter Weapon',
+      [1663] = 'Rockbiter Weapon',
+      [683] = 'Rockbiter Weapon',
+      [1664] = 'Rockbiter Weapon',
+      [5] = 'Flametongue Weapon',
+      [4] = 'Flametongue Weapon',
+      [3] = 'Flametongue Weapon',
+      [523] = 'Flametongue Weapon',
+      [1665] = 'Flametongue Weapon',
+      [1666] = 'Flametongue Weapon',
+      [2] = 'Frostbrand Weapon',
+      [12] = 'Frostbrand Weapon',
+      [524] = 'Frostbrand Weapon',
+      [1667] = 'Frostbrand Weapon',
+      [1668] = 'Frostbrand Weapon',
+      [283] = 'Windfury Weapon',
+      [284] = 'Windfury Weapon',
+      [525] = 'Windfury Weapon',
+      [1669] = 'Windfury Weapon'
+    }
+  
     local Hasweapon,timerem,_,weaponID = GetWeaponEnchantInfo()
-
+  
     if Hasweapon and timerem / 1000 < 20 then cast(weaponenchants[weaponID],'player') end
-
+  
     return false
-end
+  end
 setfenv(buffs, dark_addon.environment.env)
 
 local function dps()
 
     if target.distance < 8 and not IsCurrentSpell(6603) then
         auto_attack()
+        return true
     end
 
-    if totem and enemies.around(8) >= 2 and castable('Stoneclaw Totem') and not earthtotem then
+    if stoneclaw and enemies.around(8) >= stoneclawenemies and not earthtotem then
+      if castable('Stoneclaw Totem') and not player.moving then
         cast(SB.StoneclawTotem)
         return true
+      end
     end
 
-    if target.distance < 8 and totem and castable('Searing Totem') and not firetotem and thp > 70 then
+    if nova and enemies.around(8) >= novaenemies and not firetotem then
+      if castable(SB.FireNovaTotem) and not player.moving then
+        cast(SB.FireNovaTotem)
+        return true
+      end
+    end
+
+    if searingtotem and not firetotem and (not nova or enemies.around(8) < novaenemies) then
+      if target.distance < 8 and castable('Searing Totem') and thp > 70 then
         cast(SB.SearingTotem)
         return true
+      end
     end
     
     if castable('Flame Shock') and shockrange and thp > 70 then
@@ -274,7 +293,11 @@ local function combat()
   lightningshieldpercent = dark_addon.settings.fetch('shaman_lightningshield.spin', 75)
   healingwave = dark_addon.settings.fetch('shaman_healingwave.check', false)
   healingwavepercent = dark_addon.settings.fetch('shaman_healingwave.spin', 50)
-  totem = dark_addon.settings.fetch('shaman_totem', false)
+  searingtotem = dark_addon.settings.fetch('shaman_searingtotem', false)
+  stoneclaw = dark_addon.settings.fetch('shaman_stoneclaw.check', false)
+  stoneclawenemies = dark_addon.settings.fetch('shaman_stoneclaw.spin', 2)
+  nova = dark_addon.settings.fetch('shaman_nova.check', false)
+  novaenemies = dark_addon.settings.fetch('shaman_nova.spin', 4)
   shockrange = IsSpellInRange('Earth Shock', 'target') == 1
   firetotem = GetTotemInfo(1) == true
   earthtotem = GetTotemInfo(2) == true
@@ -334,12 +357,6 @@ local interface = {
         text = 'Heal when out of combat',
         desc = '',
         default = false
-        }, {
-        key = 'totem',
-        type = 'checkbox',
-        text = 'Automatic use of totems',
-        desc = '',
-        default = false
         }, 
         { key = 'curepoison',
           type = 'checkbox',
@@ -368,7 +385,32 @@ local interface = {
         min = 5,
         max = 100,
         step = 5
-        }, {
+        }, {type = 'rule'}, 
+        {type = 'text', text = ' Use Totems '}, 
+        {
+        key = 'searingtotem',
+        type = 'checkbox',
+        text = 'Use Searing Totem',
+        desc = '',
+        default = false
+        },
+        {key = 'stoneclaw',
+        type = 'checkspin',
+        text = 'Use stoneclaw totem when at or above enemies',
+        default = 2,
+        min = 1,
+        max = 100,
+        step = 5
+        },
+        {key = 'nova',
+        type = 'checkspin',
+        text = 'Use Fire Nova totem when at or above enemies',
+        default = 4,
+        min = 1,
+        max = 100,
+        step = 5
+        }, {type = 'rule'}, 
+        {type = 'text', text = ' Use Items '}, {
         key = 'usehealingpotion',
         type = 'checkspin',
         text = 'Use Healing Potion at % Health',
@@ -392,7 +434,7 @@ local interface = {
         min = 5,
         max = 100,
         step = 5
-        }, 
+        },
     }
   }
 

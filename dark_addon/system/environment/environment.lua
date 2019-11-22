@@ -34,7 +34,7 @@ dark_addon.environment.GetSpellName = GetSpellName
 dark_addon.environment.env = setmetatable(env, {
   __index = function(_env, called)
     local ds = debugstack(2, 1, 0)
-    local file, line = string.match(ds, '^.-\(%a-%.lua):(%d+):.+$')
+    local file, line = string.match(ds, '^.-\\(%a-%.lua):(%d+):.+$')
     dark_addon.console.file = file
     dark_addon.console.line = line
     if dark_addon.environment.logical.validate(called) then
