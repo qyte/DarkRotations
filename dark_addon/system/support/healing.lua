@@ -247,7 +247,7 @@ end
 local function updateHealth(endTime, unitGUIDS)
     if ticker == nil then return end
     local clip = dark_addon.settings.fetch('_engine_turbo', false) and dark_addon.settings.fetch('_engine_castclip', 0.15) or 0
-    if endTime - GetTime() > clip + 0.25 then return end
+    if endTime - GetTime() > clip + 0.1 then return end
     for _,guid in pairs(unitGUIDS) do
         local unit = dark_addon.Healcomm.guidToUnit[guid]
         if unit then
@@ -265,7 +265,6 @@ local function startheal(event, casterGUID, spellID, bitType, endTime, ...)
     if bitType ~= DIRECT_HEALS then return end
     if casterGUID ~= playerGUID then return end
     if not HealingSpells[spellID] then return end
-    --dark_addon.console.debug(1,'engine','engine',string.format("spell=%s ,type = %d",GetSpellInfo(spellID),bitType))
     cancelTicks()
     if tainted then
         cleartable(dark_addon.UnitHealth)
