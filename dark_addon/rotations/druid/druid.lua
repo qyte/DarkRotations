@@ -2,11 +2,11 @@ local addon, dark_addon = ...
 
 dark_addon.event.register("UI_ERROR_MESSAGE", function(_,msg)
   if UnitAffectingCombat('player') then return end
-  if strfind(msg,'shapeshift') then
+  if strfind(msg,'shapeshift') and dark_addon.protected then
     _RunMacroText('/cancelform')
   end
   if strfind(msg,'standing to do') then
-    _RunMacroText('/stand')
+    DoEmote("STAND")
   end
 end)
 local lastOOC = GetTime()
@@ -27,6 +27,7 @@ local FullPowershift
 local immune
 local combo
 local hasFuror
+local tanking
 
 local function interrupt()
 
@@ -123,15 +124,15 @@ local function tiger()
     return true
   end
 
-  if dark_addon.settings.fetch('druid_powershift.check', false) then
-    if Powershift and hasFuror and UnitPower("player", 3) < 19 then
+  if dark_addon.settings.fetch('druid_powershift', false) then
+    if FormMana >= Powershift and hasFuror and UnitPower("player", 3) < 19 then
       macro("/cancelform")
       cast(SB.CatForm)
     end
   end
 
-  if dark_addon.settings.fetch('druid_fullpowershift.check', false) then
-    if FullPowershift and hasFuror and UnitPower("player", 3) < 19 then
+  if dark_addon.settings.fetch('druid_fullpowershift', false) then
+    if FormMana >= FullPowershift and hasFuror and UnitPower("player", 3) < 19 then
       macro("/cancelform")
       cast(SB.CatForm)
     end
@@ -423,6 +424,10 @@ setfenv(heal, dark_addon.environment.env)
 
 local function combat()
 
+  if not player.alive or player.buff('Bandage').exists or player.channeling() or player.casting then return end
+  if travel or aquatic then return end
+
+  tanking = UnitIsUnit('player','targettarget')
   caster = GetShapeshiftForm() == 0
   bear = player.buff('Bear Form').up or player.buff('Dire Bear Form').up
   aquatic = player.buff('Aquatic Form').up
@@ -431,14 +436,12 @@ local function combat()
   FormMana = UnitPower("player", 0)
   SuperHealCost = GetSpellPowerCost('Cat Form')[1].cost + GetSpellPowerCost('Regrowth')[1].cost + GetSpellPowerCost('Rejuvenation')[1].cost
   HealCost = GetSpellPowerCost('Cat Form')[1].cost + GetSpellPowerCost('Healing Touch')[1].cost
-  Powershift = GetSpellPowerCost('Cat Form')[1].cost + GetSpellPowerCost('Regrowth')[1].cost + GetSpellPowerCost('Rejuvenation')[1].cost + GetSpellPowerCost('Cat Form')[1].cost
+  Powershift = GetSpellPowerCost('Cat Form')[1].cost + GetSpellPowerCost('Regrowth')[1].cost + GetSpellPowerCost('Rejuvenation')[1].cost
   FullPowershift = GetSpellPowerCost('Cat Form')[1].cost
   immune = UnitCreatureType("target") == "Mechanical" or UnitCreatureType("target") == "Elemental" or UnitCreatureType("target") == "Undead"
   hasFuror = select(5,GetTalentInfo(3,2)) == 5
   combo = player.power.combopoints.actual
 
-  if not player.alive or player.buff('Bandage').exists or player.channeling() or player.casting then return end
-  if travel or aquatic then return end
 
   if heal() then return end
   if not target.alive or not target.enemy then return end
@@ -451,16 +454,17 @@ end
 local function resting()
 
   if not player.alive or player.buff('Food').exists or player.buff('Drink').exists or
-    player.buff('Bandage').exists or player.channeling() or player.casting then return end
+    player.buff('Bandage').exists or player.channeling() or player.casting or UnitIsAFK('player') or IsResting() then return end
 
   local water = IsSubmerged() or IsSwimming()
-
+  aquatic = player.buff('Aquatic Form').up
+  travel = player.buff('Travel Form').up
+  if travel or aquatic then return end
+  
   if heal() then return end
   if buffs() then return end
 
   if GetTime() - lastOOC < 10 or not player.moving then return end
-  aquatic = player.buff('Aquatic Form').up
-  travel = player.buff('Travel Form').up
   if water and not aquatic and castable('Aquatic Form') then
     macro('/cancelform [swimming,noform:2]')
     macro('/cast [swimming] Aquatic Form')
