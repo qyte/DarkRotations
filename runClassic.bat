@@ -9,7 +9,7 @@ FOR /F "usebackq skip=2 tokens=3*" %%A IN (`REG QUERY %KEY_NAME% /v %VALUE_NAME%
 )
 
 if defined WoWDir (
-    start "" %Wowdir%\_classic_\Wow.exe
+    start "" %Wowdir%\_classic_\WowClassic.exe
     @echo Classic Install Path = %WoWDir%
 ) else (
     @echo "World of Warcraft Classic is not installed" 
