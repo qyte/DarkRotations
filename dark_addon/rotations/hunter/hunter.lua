@@ -15,11 +15,17 @@ dark_addon.event.register("UNIT_SPELLCAST_SUCCEEDED", function(caster, castGUID,
 	lastMark = GetTime()
 end)
 local autoshotslot = nil
-dark_addon.event.register("PLAYER_ENTERING_WORLD", function ( ... )
+local function findAutoShotSlot()
+  if autoshotslot and select(2,GetActionInfo(autoshotslot)) == 75 then return end
+  autoshotslot = nil
   for i=1,120 do
     local type,spellid = GetActionInfo(i)
     if spellid==75 then autoshotslot = i end
   end
+end
+
+dark_addon.event.register("PLAYER_ENTERING_WORLD", function ( ... )
+  findAutoShotSlot()
 end)
 
 local tanking
@@ -119,7 +125,7 @@ local function petbattle()
 
   if not UnitExists('pettarget') then return false end
   
-  if HaveClaw and focus >= 40 then
+  if HaveClaw and focus >= 70 then
     cast('Claw', 'pettarget')
     return true
   end
@@ -134,7 +140,7 @@ local function petbattle()
     return true
   end
 
-  if HaveScreech and focus >= 35 and target.debuff('Screech').down then
+  if HaveScreech and focus >= 35 and pettarget.debuff('Screech').down then
     cast('Screech', 'pettarget')
     return true
   end
@@ -155,7 +161,9 @@ local function rangedps()
     return true
   end
 
-  if IsAutoRepeatAction(autoshotslot) == false then
+  findAutoShotSlot()
+
+  if autoshotslot and IsAutoRepeatAction(autoshotslot) == false then
     auto_shot()
   end
   
