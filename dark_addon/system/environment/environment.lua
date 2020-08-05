@@ -69,12 +69,28 @@ function dark_addon.environment.hook(func)
   setfenv(func, dark_addon.environment.env)
 end
 
+local latest = nil
 function dark_addon.environment.iterator(raw)
   local members = GetNumGroupMembers()
   local group_type = IsInRaid() and 'raid' or IsInGroup() and 'party' or 'solo'
   local index = 0
   local returned_solo = false
   return function()
+    local ipet = nil
+    if latest then
+      local ret = latest == 'player' and 'pet' or latest..'pet'
+      if UnitExists(ret) then ipet = ret end
+      latest = nil
+    end
+    if ipet then
+      if raw then
+        return ipet
+      end
+      if not dark_addon.environment.unit_cache[ipet] then
+        dark_addon.environment.unit_cache[ipet] = dark_addon.environment.conditions.unit(ipet)
+      end
+      return dark_addon.environment.unit_cache[ipet]
+    end
     local called
     if group_type == 'solo' and not returned_solo then
       returned_solo = true
@@ -90,6 +106,7 @@ function dark_addon.environment.iterator(raw)
       end
     end
     if called then
+      latest = called
       if raw then
         return called
       end

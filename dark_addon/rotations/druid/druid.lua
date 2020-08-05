@@ -1,17 +1,25 @@
 local addon, dark_addon = ...
 
-dark_addon.event.register("UI_ERROR_MESSAGE", function(_,msg)
+local lastBehind = 0
+local lastMaul = 0
+
+dark_addon.event.register("UI_ERROR_MESSAGE", function(e, msg)
+  if e==50 and strfind(msg,'behind') then
+      lastBehind = GetTime()
+  end
   if UnitAffectingCombat('player') then return end
-  if strfind(msg,'shapeshift') then
+  local p = dark_addon.environment.env.player
+  if strfind(msg, 'standing to do') and (not p.buff('Food').exists or not p.buff('Drink').exists) then DoEmote('STAND') end
+  if strfind(msg,'shapeshift') and dark_addon.protected then
     _RunMacroText('/cancelform')
   end
-  if strfind(msg,'standing to do') then
-    _RunMacroText('/stand')
-  end
 end)
-local lastOOC = GetTime()
-dark_addon.event.register("PLAYER_REGEN_ENABLED", function()
-  lastOOC = GetTime()
+
+dark_addon.event.register("UNIT_SPELLCAST_SUCCEEDED", function(caster, castGUID, spellID)
+  if not UnitIsUnit(caster,'player') then return end
+  if GetSpellInfo(spellID) == "Maul" then
+    lastMaul = GetTime()
+  end
 end)
 
 local caster
@@ -19,43 +27,285 @@ local bear
 local aquatic
 local cat
 local travel
-local FormMana
-local SuperHealCost
-local HealCost
-local Powershift
-local FullPowershift
-local immune
+local tanking
+local mana
+local energy
+local hot
+local selfheal
+local strong
+local php
+local thp
+local flee
 local combo
-local hasFuror
+local userip
+local pshiftenergy
+local enemiesaround
+local healpartner
+local rage
+local maultime
 
-local function interrupt()
+local ClamID = {7973, 5524, 5523, 15874}
+local ClamName = {'Big-mouth Clam', 'Thick-shelled Clam', 'Small Barnacled Clam', 'Soft-shelled Clam'}
+local HealingPotionID = {118, 858, 4596, 1710, 18839, 3928, 13446}
+local HealingPotionName = {'Minor Healing Potion', 'Lesser Healing Potion', 'Discolored Healing Potion', 'Greater Healing Potion', 'Combat Healing Potion', 'Superior Healing Potion', 'Major Healing Potion'}
 
-  if not toggle('interrupts', false) then return false end
-  local intpercent = math.random(35, 55)
+local function useitem()
 
-  if bear and castable('Bash') and target.interrupt('target', intpercent) and
-      IsSpellInRange('Bash', 'target') == 1 then
-      cast('Bash', 'target')
+  for i=#ClamID,1,-1 do
+    if GetItemCount(ClamID[i]) >= 1 then
+      macro('/use '..ClamName[i])
       return true
+    end
+  end
+
+  for i=#HealingPotionID,1,-1 do
+    if GetItemCount(HealingPotionID[i]) >= 1 and (GetItemCooldown(HealingPotionID[i])) == 0 and player.health.percent < 10 then
+      macro('/cancelform')
+      macro('/use '..HealingPotionName[i])
+      return true
+    end
   end
 
   return false
 end
-setfenv(interrupt, dark_addon.environment.env)
+setfenv(useitem, dark_addon.environment.env)
 
-local function buffs()
-
-  if not dark_addon.settings.fetch('druid_AutoBuff', false) then return false end
-
-  if player.buff('Mark of the Wild').down and player.power.mana.percent > 40 then
-    macro("/cancelform")
-    cast('Mark of the Wild', 'player')
+local function heal()
+  if toggle('groupheal', false) then return false end
+  -- Self Healing
+  if modifier.control and not player.moving and mana > hot and php < 45 then
+    macro('/cancelform')
+    cast('Regrowth', 'player')
     return true
   end
 
-  if player.buff('Thorns').down and player.power.mana.percent > 40 then
-    macro("/cancelform")
-    cast('Thorns', 'player')
+  if caster and player.buff('Rejuvenation').down and php < 85 then
+    cast('Rejuvenation', 'player')
+    return true
+  end
+
+  if mana < hot and modifier.control then
+    if not player.moving and mana > selfheal and php < 45 then
+      macro('/cancelform')
+      cast('Healing Touch', 'player')
+      return true
+    end
+  end
+
+  --Group Heal: Will use Healing Touch on lowest party member that is under 50% health if no mob is attacking you.
+  if groupheal and enemiesaround == 0 then
+    if modifier.control and not player.moving and mana > selfheal and lowest.health.percent < 50 then
+      macro('/cancelform')
+      cast('Healing Touch', lowest)
+      return true
+    end
+  end
+
+  return false
+end
+setfenv(heal, dark_addon.environment.env)
+
+local function panther()
+
+  if modifier.control then return false end
+
+  if toggle('tank', false) or toggle('groupheal', false) then return false end
+
+  --get into cat form if you are not in Travel or Aquatic form
+  if not travel or aquatic then
+    if not cat and castable(SB.CatForm) then
+      cast(SB.CatForm)
+      return true
+    end
+  end
+
+  if dark_addon.settings.fetch('druid_pshift', 'fps') == 'fps' then
+    if mana >= GetSpellPowerCost('Cat Form')[1].cost and energy <= pshiftenergy then
+      macro('/cancelform')
+      cast(SB.CatForm)
+      return true
+    end
+  end
+
+  if dark_addon.settings.fetch('druid_pshift', 'pps') == 'pps' then
+    if mana >= selfheal and energy <= pshiftenergy then
+      macro('/cancelform')
+      cast(SB.CatForm)
+      return true
+    end
+  end
+
+  if not cat then return false end
+
+  if not IsCurrentSpell(6603) then
+    auto_attack()
+    return true
+  end
+
+  if castable(SB.FaerieFireFeral) and not target.debuff('Faerie Fire (Feral)').any then
+    cast(SB.FaerieFireFeral,'target')
+    return true
+  end
+
+  if target.distance > 10 then return false end
+
+  -- Combo point finishers
+  if userip and strong then
+    if combo >= 4 and thp > 40 and castable(SB.Rip) and target.debuff(SB.Rip).down then
+      cast('Rip', 'target')
+      return true
+    end
+  end
+
+  if castable(SB.FerociousBite) and combo >= 4 then
+    cast(SB.FerociousBite,'target')
+    return true
+  end
+
+  if combo >= 4 then return false end
+
+  --Combo Builders
+
+  --rake usage
+  if dark_addon.settings.fetch('druid_userake', 'all') == 'all' then
+    if castable(SB.Rake) and thp > 80 and target.debuff('Rake').down then
+      cast(SB.Rake,'target')
+      return true
+    end
+  end
+
+  if dark_addon.settings.fetch('druid_userake', 'str') == 'str' then
+    if castable(SB.Rake) and strong and thp > 40 and target.debuff('Rake').down then
+      cast(SB.Rake,'target')
+      return true
+    end
+  end
+
+  --Will use Claw if your energy get 80 or higher to not waste energy (because you couldnt get behind the target to Shred)
+  if GetTime() - lastBehind < 1 and energy >= 80 then
+    if castable(SB.Claw) then
+      cast(SB.Claw)
+      return true
+    end
+  end
+
+  -- Will use Shred if your target is not targeting you or if it flees from you
+  if not tanking or not UnitExists('targettarget') then
+    if castable(SB.Shred) and GetTime() - lastBehind > 0.5 then
+      cast(SB.Shred,'target')
+      return true
+    end
+  end
+
+  if tanking and castable(SB.Claw) then
+    cast(SB.Claw,'target')
+    return true
+  end
+
+
+  return false
+end
+setfenv(panther, dark_addon.environment.env)
+
+local function beartanking()
+
+  if modifier.control then return false end
+
+  if not toggle('tank', false) or toggle('groupheal', false) then return false end
+
+  if not travel or aquatic then
+    if not bear and IsSpellKnown(9634) and castable(SB.DireBearForm) then
+      cast(SB.DireBearForm)
+      return true
+    end
+  end
+
+  if not travel or aquatic then
+    if not bear and castable(SB.BearForm) and not IsSpellKnown(9634) then
+      cast(SB.BearForm)
+      return true
+    end
+  end
+
+  if not bear or target.distance > 8 then return false end
+
+  if not IsCurrentSpell(6603) then
+    auto_attack()
+    return true
+  end
+
+  if dark_addon.settings.fetch('druid_growl', false) then
+    if not tanking and castable(SB.Growl) then
+      cast(SB.Growl)
+      return true
+    end
+  end
+
+  if GetTime() - lastMaul >= maultime then
+    if enemiesaround >= 3 and castable(SB.Maul) and not IsCurrentSpell('Maul') then
+      cast(SB.Maul)
+    end
+  end
+
+  if enemiesaround >= 3 and castable(SB.DemoralizingRoar) and not target.debuff('Demoralizing Roar').any and not target.debuff('Demoralizing Shout').any then
+    cast(SB.DemoralizingRoar)
+    return true
+  end
+  
+  if enemiesaround >= 3 and castable(SB.Swipe) then
+    cast(SB.Swipe)
+    return true
+  end
+
+  if enemiesaround < 3 and castable(SB.Maul) and not IsCurrentSpell('Maul') then
+    cast(SB.Maul)
+  end
+
+  if enemiesaround < 3 and castable(SB.Swipe) and rage > 70 then
+    cast(SB.Swipe)
+    return true
+  end
+
+  return false
+end
+setfenv(beartanking, dark_addon.environment.env)
+
+local function prowling()
+
+  if not target.exists or not target.alive or not target.enemy then return false end
+
+  if dark_addon.settings.fetch('druid_prowl.check', false) and target.distance < dark_addon.settings.fetch('druid_prowl.spin', 18) then
+    if castable('Prowl') and not IsStealthed() then
+      cast(SB.Prowl)
+      return true
+    end
+  end
+
+  if IsStealthed() and IsSpellInRange('Ravage', 'target') == 1 and UnitPower("player", 3) == 100 then
+    cast(SB.TigersFury)
+    return true
+  end
+
+  if IsStealthed() and IsSpellInRange('Ravage', 'target') == 1 and castable(SB.Ravage) then
+    cast(SB.Ravage)
+    return true
+  end
+
+  return false
+end
+setfenv(prowling, dark_addon.environment.env)
+
+local function buffs()
+
+  if IsStealthed() or player.buff('Aquatic Form').up or not dark_addon.settings.fetch('druid_autobuff', false) then return false end
+
+  if castable(SB.MarkOfTheWild) and not player.buff('Mark of the Wild').any then
+    cast(SB.MarkOfTheWild, 'player')
+    return true
+  end
+
+  if castable(SB.Thorns) and not player.buff('Thorns').any then
+    cast(SB.Thorns, 'player')
     return true
   end
 
@@ -63,593 +313,281 @@ local function buffs()
 end
 setfenv(buffs, dark_addon.environment.env)
 
-local function selfHeal()
-end
-setfenv(selfHeal, dark_addon.environment.env)
+local dispeldelaypoison = 0
+local dispeldelaycurse = 0
 
-local function tiger()
+local function dispell()
 
-  if not toggle('cat', false) or toggle('tank', false) or toggle('balance', false) then return false end
+  local dispellable_unit_poison = group.removable('poison')
+  local dispellable_unit_curse = group.removable('curse')
 
-  local Faer = GetSpellPowerCost(SB.FaerieFire.id)[1].cost + GetSpellPowerCost('Bear Form')[1].cost
+  if not dispellable_unit_poison then dispeldelaypoison = 0 end
 
-  if player.health.percent < 20 and FormMana < HealCost and FormMana > GetSpellPowerCost('Bear Form')[1].cost and
-    GetItemCount(929) >= 1 then
-    macro("/cancelform")
-    macro("/use Healing Potion")
-    return true
-  end
-  
-  if modifier.control and not player.moving and FormMana < SuperHealCost and FormMana > HealCost then
-    macro("/cancelform")
-    cast('Healing Touch', 'player')
-    return true
-  end
-  
-  if modifier.control and player.buff('Regrowth').down and not
-    player.moving and FormMana > SuperHealCost then
-    macro("/cancelform")
-    cast('Regrowth', 'player')
-    return true
-  end
-
-  if caster and player.buff('Rejuvenation').down and castable('Rejuvenation') then
-    cast('Rejuvenation', 'player')
-    return true
-  end
-
-  if caster and target.debuff('Faerie Fire').down and FormMana > Faer and 
-    castable('Faerie Fire') and IsSpellInRange('Faerie Fire', 'target') == 1 then
-    cast('Faerie Fire', 'target')
-    return true
-  end
-
-  if not bear and enemies.around(8) >= 3 and FormMana > GetSpellPowerCost('Bear Form')[1].cost and not IsSpellKnown(9634) then
-    macro("/cancelform")
-    cast(SB.BearForm)
-    return true
-  end
-
-  if not bear and FormMana > GetSpellPowerCost(9634)[1].cost and 
-    enemies.around(8) >= 3 and IsSpellKnown(9634) then
-    macro("/cancelform")
-    cast(SB.DireBearForm)
-    return true
-  end
-
-  if not cat and castable(SB.CatForm) and enemies.around(8) <= 2 and not bear then
-    macro("/cancelform")
-    cast(SB.CatForm)
-    return true
-  end
-
-  if dark_addon.settings.fetch('druid_powershift.check', false) then
-    if Powershift and hasFuror and UnitPower("player", 3) < 19 then
-      macro("/cancelform")
-      cast(SB.CatForm)
+    if dark_addon.settings.fetch('druid_curepoison', false) and dispellable_unit_poison then
+        if dispeldelaypoison == 0 then
+            dispeldelaypoison = GetTime() + 1.5 + math.random()
+        else
+        if dispeldelaypoison < GetTime() and castable(SB.AbolishPoison) and not dispellable_unit_poison.buff('Abolish Poison').any then
+            macro('/cancelform')
+            cast(SB.AbolishPoison, dispellable_unit_poison)
+            dispeldelaypoison = 0
+            return true
+        end
     end
   end
 
-  if dark_addon.settings.fetch('druid_fullpowershift.check', false) then
-    if FullPowershift and hasFuror and UnitPower("player", 3) < 19 then
-      macro("/cancelform")
-      cast(SB.CatForm)
+  if not dispellable_unit_curse then dispeldelaycurse = 0 end
+
+    if dark_addon.settings.fetch('druid_removecurse', false) and dispellable_unit_curse then
+        if dispeldelaycurse == 0 then
+          dispeldelaycurse = GetTime() + 1.5 + math.random()
+        else
+        if dispeldelaycurse < GetTime() and castable(SB.RemoveCurse) then
+            macro('/cancelform')
+            cast(SB.RemoveCurse, dispellable_unit_curse)
+            dispeldelaycurse = 0
+            return true
+        end
     end
   end
 
-  if castable('Faerie Fire Feral') and target.debuff('Faerie Fire Feral').down and
-      IsSpellInRange('Faerie Fire Feral', 'target') == 1 then
-      cast('Faerie Fire Feral', 'target')
-    return true
-  end
-
-  if target.distance > 8 then return false end
-
-  if not IsCurrentSpell("Attack") then
-    macro("/startattack")
-    return true
-  end
-
-  if cat and castable('Ferocious Bite') and combo >= 4 then
-    cast('Ferocious Bite', 'target')
-    return true
-  end
-
-  if cat and castable('Rip') and not IsSpellKnown(22568) and combo >= 4 and not immune and target.health.percent > 50 then
-    cast('Rip', 'target')
-    return true
-  end
-
-  if cat and castable('Rake') and not immune and target.health.percent > 70 and target.debuff('Rake').down then
-    cast('Rake', 'target')
-    return true
-  end
-  
-  if cat and not modifier.control and castable('Claw') then
-    cast('Claw', 'target')
-    return true
-  end
-
-  if bear and castable('Demoralizing Roar') and target.debuff('Demoralizing Roar').down and enemies.around(8) >= 3 then
-    cast(SB.DemoralizingRoar)
-    return true
-  end
-
-  if bear and castable('Swipe') and enemies.around(8) >= 3 then
-    cast(SB.Swipe)
-    return true
-  end
-
-  if bear and castable('Maul') and enemies.around(8) <= 2 then
-    cast(SB.Maul)
-    return true
-  end
-
   return false
 end
-setfenv(tiger, dark_addon.environment.env)
+setfenv(dispell, dark_addon.environment.env)
 
-local function tank()
+local function partyheal()
 
-  local Group = GetNumGroupMembers()
-  local ThornCostBear = GetSpellPowerCost('Thorns')[1].cost + GetSpellPowerCost('Bear Form')[1].cost
-  local ThornCostDireBear = GetSpellPowerCost('Thorns')[1].cost + GetSpellPowerCost(9634)[1].cost
-  local UseThorns = (FormMana > ThornCostBear and not IsSpellKnown(9634)) or (FormMana > ThornCostDireBear and IsSpellKnown(9634))
+  if not toggle('groupheal', false) then return false end
 
-  if not toggle('tank', false) or toggle('cat', false) or toggle('balance', false) then return false end
-
-  if player.health.percent < 50 and player.buff('Regrowth').down and player.buff('Rejuvenation').down and not
-    player.moving and Group == 0 and FormMana > HealCost then
-    macro("/cancelform")
-    cast('Regrowth', 'player')
-    return true
-  end
-
-  if caster and player.buff('Rejuvenation').down and Group == 0 and castable('Rejuvenation') then
-    cast('Rejuvenation', 'player')
-    return true
-  end
-
-  if player.health.percent > 50 and player.buff('Thorns').down and UseThorns then
-    macro("/cancelform")
-    cast('Thorns', 'player')
-    return true
-  end
-
-  if not bear and IsSpellKnown(9634) then
+  if modifier.control and (travel or aquatic) then
     macro('/cancelform')
-    cast(SB.DireBearForm)
-    return true
   end
 
-  if not bear and not IsSpellKnown(9634) then
-    macro('/cancelform')
-    cast(SB.BearForm)
-    return true
-  end
+  if travel or aquatic then return false end
 
-  if castable('Faerie Fire Feral') and target.debuff('Faerie Fire Feral').down and
-      IsSpellInRange('Faerie Fire Feral', 'target') == 1 then
-      cast('Faerie Fire Feral', 'target')
-    return true
-  end
+  if GetShapeshiftForm() ~= 0 then macro('/cancelform') end
 
-  if target.distance > 8 then return false end
-
-  if not IsCurrentSpell("Attack") then
-    macro("/startattack")
-    return true
-  end
-
-  if castable('Demoralizing Roar') and target.debuff('Demoralizing Roar').down and 
-      (enemies.around(8) >= 3 or toggle('boss', false)) then
-    cast(SB.DemoralizingRoar)
-    return true
-  end
-
-  local aoeswipe = enemies.match( function (unit)
-    local CrowdControl = unit.debuff('Polymorph').up or unit.debuff('Sap').up or unit.debuff('Freezing Trap').up
-    CrowdControl = CrowdControl or unit.debuff('Seduction').up or unit.debuff('Hibernate').up
-    if unit.distance < 8 and CrowdControl then return true end
-    return false
-  end)
-
-  if castable('Swipe') and enemies.around(8) >= 3 and not aoeswipe then
-    cast(SB.Swipe)
-    return true
-  end
-
-  if castable('Maul') and (enemies.around(8) <= 2 or aoeswipe) then
-    cast(SB.Maul)
-    return true
-  end
-
-  return false
-end
-setfenv(tank, dark_addon.environment.env)
-
-local function balance()
-
-  if not toggle('balance', false) or toggle('cat', false) or toggle('tank', false) then return false end
-
-  if castable('Rejuvenation') and player.buff('Rejuvenation').down and
-    player.health.percent < 80 then
-      cast('Rejuvenation', 'player')
-      return true
-  end
-
-  if castable('Regrowth') and player.buff('Regrowth').down and
-    player.health.percent < 50 then
-      cast('Regrowth', 'player')
-      return true
-  end
-
-  if castable('Thorns') and player.buff('Thorns').down then
-    cast('Thorns', 'target')
-    return true
-  end
-
-  if not IsSpellInRange('Moonfire', 'target') == 1 then return false end
-
-  if castable('Insect Swarm') and target.debuff('Insect Swarm').down then
-    cast('Insect Swarm', 'target')
-    return true
-  end
-
-  if castable('Moonfire') and target.debuff('Moonfire').down then
-    cast('Moonfire', 'target')
-    return true
-  end
-
-  if castable('Wrath') and (target.distance < 8 or not castable('Starfire')) then
-    cast('Wrath', 'target')
-    return true
-  end
-
-  if castable('Starfire') then
-    cast('Starfire', 'target')
-    return true
-  end
-
-  if not IsCurrentSpell("Attack") and castable('Starfire') then
-    macro("/startattack")
-    return true
-  end
-
-  return false
-end
-setfenv(balance, dark_addon.environment.env)
-
-local function heal()
-
-  if not toggle('heal', false) then return false end
-
-  if not toggle('targetheal', false) then
-  
-  if dark_addon.settings.fetch('druid_swiftness.check', false) then
-    if lowest.health.percent <= dark_addon.settings.fetch('druid_swiftness.spin', 25) and
-    castable(SB.NaturesSwiftness) then
+  --Oh Shit moment...
+  if dark_addon.settings.fetch('druid_swift.check', false) and UnitAffectingCombat('player') then
+    if castable(SB.NaturesSwiftness) and castable(SB.HealingTouch) and lowest.health.percent <= dark_addon.settings.fetch('druid_swift.spin', 15) then
       macro("/cast Nature's Swiftness")
-      cast('Healing Touch', lowest)
+      cast(SB.HealingTouch, lowest)
+      return true
     end
   end
 
-  if dark_addon.settings.fetch('druid_regrowth.check', false) then
-    if lowest.health.percent <= dark_addon.settings.fetch('druid_regrowth.spin', 35) and
-    castable('Regrowth') then
-      cast('Regrowth', lowest)
+  --Regrowth for fast heal on emergency
+  if dark_addon.settings.fetch('druid_growth.check', false) and UnitAffectingCombat('player') then
+    if castable(SB.Regrowth) and lowest.health.percent <= dark_addon.settings.fetch('druid_growth.spin', 25) and not lowest.buff('Regrowth').any and not player.moving then
+      cast(SB.Regrowth, lowest)
+      return true
     end
   end
 
-  if dark_addon.settings.fetch('druid_regrowthbuff.check', false) then
-    if lowest.health.percent <= dark_addon.settings.fetch('druid_regrowthbuff.spin', 50) and
-    castable('Regrowth') and lowest.buff('Regrowth').down then
-      cast('Regrowth', lowest)
+  --Healing Touch Max Rank
+  if dark_addon.settings.fetch('druid_touch.check', false) then
+    if castable(SB.HealingTouch) and lowest.health.percent <= dark_addon.settings.fetch('druid_touch.spin', 45) and not player.moving then
+      cast(SB.HealingTouch, lowest)
+      return true
     end
   end
 
-  if dark_addon.settings.fetch('druid_healtouchmax.check', false) then
-    if lowest.health.percent <= dark_addon.settings.fetch('druid_healtouchmax.spin', 50) and
-    castable('Healing Touch') then
-      cast('Healing Touch', lowest)
-    end
+  -- Combat Res
+  if dark_addon.settings.fetch('druid_rebirth', false) then
+		local group_unit_count = IsInGroup() and GetNumGroupMembers() or 1
+		for i = 1, group_unit_count-1 do
+			local unit = 'party'..i
+			if UnitIsDead(unit) and castable(SB.Rebirth) then
+			cast(SB.Rebirth, unit)
+			return true
+			end
+		end
   end
+  
+  --Dispell
+  if dispell() then return true end
 
-  if dark_addon.settings.fetch('druid_healtouch4.check', false) then
-    if lowest.health.percent <= dark_addon.settings.fetch('druid_healtouch4.spin', 80) and
-    castable('Healing Touch(Rank 4)') then
-      cast('Healing Touch(Rank 4)', lowest)
+  --Healing Touch Rank4
+  if dark_addon.settings.fetch('druid_lowtouch.check', false) then
+    if castable(SB.HealingTouch[4]) and lowest.health.percent <= dark_addon.settings.fetch('druid_lowtouch.spin', 70) and not player.moving then
+      cast(SB.HealingTouch[4], lowest)
+      return true
     end
   end
 
   if dark_addon.settings.fetch('druid_rejuva.check', false) then
-    if lowest.health.percent <= dark_addon.settings.fetch('druid_rejuva.spin', 85) and
-    castable('Rejuvenation') and lowest.buff('Rejuvenation').down then
-      cast('Rejuvenation', lowest)
+    if castable(SB.Rejuvenation) and not lowest.buff('Rejuvenation').any and lowest.health.percent <= dark_addon.settings.fetch('druid_rejuva.spin', 60) then
+      cast(SB.Rejuvenation, lowest)
+      return true
     end
   end
 
-  end
+  if not target.exists or not target.alive or target.enemy then return false end
 
-  if toggle('targetheal', false) then
-
-  if dark_addon.settings.fetch('druid_swiftness.check', false) then
-    if target.health.percent <= dark_addon.settings.fetch('druid_swiftness.spin', 25) and
-    castable(SB.NaturesSwiftness) then
-      macro("/cast Nature's Swiftness")
-      cast('Healing Touch', 'target')
+  if dark_addon.settings.fetch('druid_keeprejuva', false) then
+    if castable(SB.Rejuvenation) and not target.buff('Rejuvenation').any then
+      cast(SB.Rejuvenation,'target')
+      return true
     end
   end
 
-  if dark_addon.settings.fetch('druid_regrowth.check', false) then
-    if target.health.percent <= dark_addon.settings.fetch('druid_regrowth.spin', 35) and
-    castable('Regrowth') then
-      cast('Regrowth', 'target')
+  if dark_addon.settings.fetch('druid_keepgrowth', false) then
+    if castable(SB.Regrowth) and not target.buff('Regrowth').any then
+      cast(SB.Regrowth,'target')
+      return true
     end
   end
-
-  if dark_addon.settings.fetch('druid_regrowthbuff.check', false) then
-    if target.health.percent <= dark_addon.settings.fetch('druid_regrowthbuff.spin', 50) and
-    castable('Regrowth') and target.buff('Regrowth').down then
-      cast('Regrowth', 'target')
-    end
-  end
-
-  if dark_addon.settings.fetch('druid_healtouchmax.check', false) then
-    if target.health.percent <= dark_addon.settings.fetch('druid_healtouchmax.spin', 50) and
-    castable('Healing Touch') then
-      cast('Healing Touch', 'target')
-    end
-  end
-
-  if dark_addon.settings.fetch('druid_healtouch4.check', false) then
-    if target.health.percent <= dark_addon.settings.fetch('druid_healtouch4.spin', 80) and
-    castable('Healing Touch(Rank 4)') then
-      cast('Healing Touch(Rank 4)', 'target')
-    end
-  end
-
-  if dark_addon.settings.fetch('druid_rejuva.check', false) then
-    if target.health.percent <= dark_addon.settings.fetch('druid_rejuva.spin', 85) and
-    castable('Rejuvenation') and target.buff('Rejuvenation').down then
-      cast('Rejuvenation', 'target')
-    end
-  end
-end
 
   return false
 end
-setfenv(heal, dark_addon.environment.env)
+setfenv(partyheal, dark_addon.environment.env)
+
 
 local function combat()
+  
+  if not player.alive or player.buff('Food').exists or player.buff('Drink').exists or player.buff('Bandage').exists or player.channeling() or player.casting or
+  UnitIsAFK('player') or IsResting() then return end
 
+  tanking = UnitIsUnit('player','targettarget')
+  flee = not UnitExists('targettarget')
   caster = GetShapeshiftForm() == 0
   bear = player.buff('Bear Form').up or player.buff('Dire Bear Form').up
   aquatic = player.buff('Aquatic Form').up
   cat = player.buff('Cat Form').up
   travel = player.buff('Travel Form').up
-  FormMana = UnitPower("player", 0)
-  SuperHealCost = GetSpellPowerCost('Cat Form')[1].cost + GetSpellPowerCost('Regrowth')[1].cost + GetSpellPowerCost('Rejuvenation')[1].cost
-  HealCost = GetSpellPowerCost('Cat Form')[1].cost + GetSpellPowerCost('Healing Touch')[1].cost
-  Powershift = GetSpellPowerCost('Cat Form')[1].cost + GetSpellPowerCost('Regrowth')[1].cost + GetSpellPowerCost('Rejuvenation')[1].cost + GetSpellPowerCost('Cat Form')[1].cost
-  FullPowershift = GetSpellPowerCost('Cat Form')[1].cost
-  immune = UnitCreatureType("target") == "Mechanical" or UnitCreatureType("target") == "Elemental" or UnitCreatureType("target") == "Undead"
-  hasFuror = select(5,GetTalentInfo(3,2)) == 5
+  mana = UnitPower("player", 0)
+  rage = UnitPower("player", 1)
+  energy = UnitPower("player", 3)
+  hot = GetSpellPowerCost('Cat Form')[1].cost + GetSpellPowerCost('Regrowth')[1].cost + GetSpellPowerCost('Rejuvenation')[1].cost
+  selfheal = GetSpellPowerCost('Cat Form')[1].cost + GetSpellPowerCost('Healing Touch')[1].cost
+  strong = UnitClassification("target") == "elite" or UnitClassification("target") == "rareelite" or UnitClassification("target") == "worldboss"
+  php = player.health.percent
+  thp = target.health.percent
   combo = player.power.combopoints.actual
+  userip = dark_addon.settings.fetch('druid_userip', false)
+  pshiftenergy = dark_addon.settings.fetch("druid_pshiftenergy", 20)
+  maultime = dark_addon.settings.fetch("druid_maul", 5)
+  enemiesaround = enemies.count(function (unit) return UnitIsUnit('player',unit.unitID..'target') end)
+  healpartner = dark_addon.settings.fetch('druid_healpartner', false)
 
-  if not player.alive or player.buff('Bandage').exists or player.channeling() or player.casting then return end
-  if travel or aquatic then return end
-
+  if useitem() then return end
+  if partyheal() then return end
   if heal() then return end
-  if not target.alive or not target.enemy then return end
-  if tiger() then return end
-  if tank() then return end
-  if balance() then return end
+  if not target.alive or not target.enemy or target.debuff('Polymorph').any then return end
+  if panther() then return end
+  if beartanking() then return end
     -- combat
 end
 
 local function resting()
 
-  if not player.alive or player.buff('Food').exists or player.buff('Drink').exists or
-    player.buff('Bandage').exists or player.channeling() or player.casting then return end
+  if not player.alive or player.buff('Food').exists or player.buff('Drink').exists or player.buff('Bandage').exists or player.channeling() or player.casting or
+  UnitIsAFK('player') or IsResting() then return end
 
-  local water = IsSubmerged() or IsSwimming()
+  mana = UnitPower("player", 0)
+  hot = GetSpellPowerCost('Cat Form')[1].cost + GetSpellPowerCost('Regrowth')[1].cost + GetSpellPowerCost('Rejuvenation')[1].cost
+  selfheal = GetSpellPowerCost('Cat Form')[1].cost + GetSpellPowerCost('Healing Touch')[1].cost
+  php = player.health.percent
 
+  if useitem() then return end
+  if partyheal() then return end
   if heal() then return end
   if buffs() then return end
-
-  if GetTime() - lastOOC < 10 or not player.moving then return end
-  aquatic = player.buff('Aquatic Form').up
-  travel = player.buff('Travel Form').up
-  if water and not aquatic and castable('Aquatic Form') then
-    macro('/cancelform [swimming,noform:2]')
-    macro('/cast [swimming] Aquatic Form')
-    return
-  end
-  --resting
+  if prowling() then return end
+    -- -- resting
 end
 
 local function interface()
 
   local interface = {
       
-          key = 'druid',
-          title = 'druid by Rohirrim',
-          width = 350,
-          height = 400,
-          resize = true,
-          show= false,
-          template = {
-              { type = 'header', text = 'druid Settings', align= 'center'}, 
-              { type = 'rule'}, 
-              {key = 'AutoBuff', type = 'checkbox',
-              text = 'Auto Buff',
-              desc = '',
-              default = false
-            }, {type = 'text', text = ' Shapeshifting '}, 
-            {key = 'powershift', type = 'checkbox',
-              text = 'Powershift',
-              desc = 'Will powershift to take advantage of Furor talent. Will save mana for heal if needed. Best option for solo',
-              default = false
-            },
-            {key = 'fullpowershift', type = 'checkbox',
-              text = 'Full Powershift',
-              desc = 'Will powershift to take advantage of Furor talent. Will not save mana for heal. Best option for groups',
-              default = false
-            },
-            { type = 'rule'}, 
-           { type = 'header', text = 'Heal Settings', align= 'center'}, 
-            { type = 'rule'}, {
-            key = "healtouch4",
-            type = "checkspin",
-            text = "Healing Touch Rank4",
-            default = 80,
-            desc = "Our efficient spam heal",
-            min = 5,
-            max = 100,
-            step = 5
-          }, {
-           key = "healtouchmax",
-           type = "checkspin",
-           text = "Healing Touch MaxRank",
-            default = 50,
-            desc = "",
-            min = 5,
-            max = 100,
-            step = 5
-          }, {
-          key = "swiftness",
-          type = "checkspin",
-          text = "Nature's Swiftness",
-          default = 25,
-          desc = "Use Nature's Swiftness with Max rank Healing Touch",
-          min = 5,
-          max = 100,
-          step = 5
-          }, {
-          key = "regrowth",
-          type = "checkspin",
-          text = "Use Regrowth",
-          default = 35,
-          desc = "",
-          min = 5,
-          max = 100,
-          step = 5
-          }, {
-          key = "regrowthbuff",
-          type = "checkspin",
-          text = "Apply Regrowth buff if target below %",
-          default = 50,
-          desc = "",
-          min = 5,
-          max = 100,
-          step = 5
-          },{
-          key = "rejuva",
-          type = "checkspin",
-          text = "Rejuvenation",
-          default = 85,
-          desc = "",
-          min = 5,
-          max = 100,
-          step = 5
-          },
+    key = 'druid',
+    title = 'druid by Rohirrim',
+    width = 340,
+    height = 600,
+    resize = true,
+    show= false,
+    template = {
+      { type = 'header', text = 'Druid Settings', align= 'center'}, 
+      { type = 'rule'},
+      { type = 'header', text = 'Feral DPS', align= 'center'},
+      { type = 'rule'},
+      {key = 'autobuff', type = 'checkbox', text = 'Auto Buff', desc = '', default = false},
+      {key = 'healpartner', type = 'checkbox', text = 'Heal party members', desc = 'Will heal group member if press control and no mob attacking you', default = false},
+      {key = 'prowl', type = 'checkspin', text = 'Use Prowl at x yards', default = 18, min = 5, max = 100, step = 1},
+      {key = 'userip', type = 'checkbox', text = 'Use Rip on Elites and Bosses', desc = '', default = false},
+      { key = 'userake',
+        type = 'dropdown',
+        text = 'Use Rake on',
+        desc = '',
+        default = 'none',
+        list = {{key = 'all', text = 'All mobs'}, {key = 'str', text = 'Elite or Boss'}, {key = 'none', text = 'Dont Use'}}
+      },
+      { type = 'rule'},
+      { type = 'header', text = 'Powershift Options', align= 'center'},
+      { type = 'rule'},
+      { key = 'pshift',
+        type = 'dropdown',
+        text = 'Mana Management',
+        desc = '',
+        default = 'none',
+        list = {{key = 'fps', text = 'Use all Mana'}, {key = 'pps', text = 'Save for Heal'}, {key = 'none', text = 'No Powershift'}}
+      },
+      {key = 'pshiftenergy', type = 'spinner', text = 'Powershift when Energy is <', default = 20, desc = '', min = 5, max = 100, step = 1},
+      { type = 'header', text = 'Feral Tank', align= 'center'},
+      { type = 'rule'},
+      {key = 'growl', type = 'checkbox', text = 'Auto use Growl', desc = '', default = false},
+      {key = 'maul', type = 'spinner', text = 'Use Maul every x Seconds when AoE', default = 5, desc = '', min = 1, max = 100, step = 1},
+      { type = 'header', text = 'Group Heal', align= 'center'},
+      { type = 'rule'},
+      {key = 'swift', type = 'checkspin', text = 'Use Nature Swiftness / Healing Touch at % HP', default = 15, min = 5, max = 300, step = 5},
+      {key = 'touch', type = 'checkspin', text = 'Use Healing Touch at % HP', default = 45, min = 5, max = 300, step = 5},
+      {key = 'lowtouch', type = 'checkspin', text = 'Use Healing Touch Rank4 at % HP', default = 70, min = 5, max = 300, step = 5},
+      {key = 'growth', type = 'checkspin', text = 'Use Regrowth at % HP', default = 25, min = 5, max = 300, step = 5},
+      {key = 'rejuva', type = 'checkspin', text = 'Use Rejuvenation at % HP', default = 25, min = 5, max = 300, step = 5},
+      {key = 'keeprejuva', type = 'checkbox', text = 'Keep Rejuvenation up on target', desc = '', default = false},
+      {key = 'keepgrowth', type = 'checkbox', text = 'Keep Regrowth HoT up on target', desc = '', default = false},
+      {key = 'rebirth', type = 'checkbox', text = 'Auto use of Rebirth', desc = '', default = false},
+      {key = 'removecurse', type = 'checkbox', text = 'Auto Remove Curse', desc = '', default = false},
+      {key = 'curepoison', type = 'checkbox', text = 'Auto Cure Poison', desc = '', default = false}
     }
   }
-  
+
   configWindow = dark_addon.interface.builder.buildGUI(interface)
-  
-  dark_addon.interface.buttons.add_toggle({
-    name = 'cat',
-    label = 'Cat',
-    on = {
-      label = 'Cat',
-      color = dark_addon.interface.color.teal,
-      color2 = dark_addon.interface.color.dark_teal
-    },
-    off = {
-      label = 'Cat',
-      color = dark_addon.interface.color.grey,
-      color2 = dark_addon.interface.color.dark_grey,
-    }
-  })
-  
-  dark_addon.interface.buttons.add_toggle({
-    name = 'tank',
-    label = 'Tank',
-    on = {
-      label = 'Tank',
-      color = dark_addon.interface.color.teal,
-      color2 = dark_addon.interface.color.dark_teal
-    },
-    off = {
-      label = 'Tank',
-      color = dark_addon.interface.color.grey,
-      color2 = dark_addon.interface.color.dark_grey,
-    }
-  })
-  
-  dark_addon.interface.buttons.add_toggle({
-    name = 'balance',
-    label = 'Balance',
-    on = {
-      label = 'Balance',
-      color = dark_addon.interface.color.teal,
-      color2 = dark_addon.interface.color.dark_teal
-    },
-    off = {
-      label = 'Balance',
-      color = dark_addon.interface.color.grey,
-      color2 = dark_addon.interface.color.dark_grey,
-    }
-  })
-  
-  dark_addon.interface.buttons.add_toggle({
-      name = 'heal',
-      label = 'Heal',
-      on = {
-          label = 'Heal',
-          color = dark_addon.interface.color.teal,
-          color2 = dark_addon.interface.color.dark_teal
-      },
-      off = {
-          label = 'Heal',
-          color = dark_addon.interface.color.grey,
-          color2 = dark_addon.interface.color.dark_grey
-      }
-  })
 
-  dark_addon.interface.buttons.add_toggle({
-    name = 'targetheal',
-    label = 'Target Heal',
-    on = {
-        label = 'Target Heal',
-        color = dark_addon.interface.color.teal,
-        color2 = dark_addon.interface.color.dark_teal
-    },
-    off = {
-        label = 'Target Heal',
-        color = dark_addon.interface.color.grey,
-        color2 = dark_addon.interface.color.dark_grey
-    }
-})
+  dark_addon.interface.buttons.add_toggle(
+    {
+        name = 'tank',
+        label = 'Tank',
+        on = {
+            label = 'Tank',
+            color = dark_addon.interface.color.blue,
+            color2 = dark_addon.interface.color.dark_blue
+        },
+        off = {
+            label = 'Tank',
+            color = dark_addon.interface.color.grey,
+            color2 = dark_addon.interface.color.dark_grey
+        }
+    })
 
-  dark_addon.interface.buttons.add_toggle({
-    name = 'boss',
-    label = 'Boss',
-    on = {
-        label = 'Boss',
-        color = dark_addon.interface.color.teal,
-        color2 = dark_addon.interface.color.dark_teal
-    },
-    off = {
-        label = 'Boss',
-        color = dark_addon.interface.color.grey,
-        color2 = dark_addon.interface.color.dark_grey
-    }
-})
-  
-  dark_addon.interface.buttons.add_toggle({
+    dark_addon.interface.buttons.add_toggle(
+    {
+        name = 'groupheal',
+        label = 'Group Heal',
+        on = {
+            label = 'Group Heal',
+            color = dark_addon.interface.color.blue,
+            color2 = dark_addon.interface.color.dark_blue
+        },
+        off = {
+            label = 'Group Heal',
+            color = dark_addon.interface.color.grey,
+            color2 = dark_addon.interface.color.dark_grey
+        }
+    })
+
+    dark_addon.interface.buttons.add_toggle({
       name = 'settings',
       label = 'Rotation Settings',
       font = 'dark_addon_icon',
@@ -672,7 +610,9 @@ local function interface()
   
       end
   })
-      end
+
+end
+
 
 dark_addon.rotation.register({
   class = dark_addon.rotation.classes.druid,
